@@ -28,6 +28,47 @@ const UI = (function () {
     set(k, v) { try { localStorage.setItem('tnv:' + k, JSON.stringify(v)); } catch (e) { /* sin almacenamiento */ } }
   };
 
+  /* ───────── Fórmulas del temario (para «Fórmulas utilizadas») ───────── */
+  const FORMULAS = {
+    norm2: 'Tipificación: ỹ = (y − m)/s ∼ N(0, 1); y = m + sỹ (ec. 2)',
+    ln67: 'Log-normal: 𝔼(y) = e<sup>m+s²/2</sup>, σ²(y) = (e<sup>s²</sup> − 1)e<sup>2m+s²</sup>; s² = log(σ²/𝔼² + 1), m = log 𝔼 − s²/2 (ec. 6–7)',
+    gam12: 'Gamma(α, β): 𝔼 = αβ, σ² = αβ²; suma de k exponenciales de media β = Gamma(k, β) (ec. 12)',
+    par17: 'Pareto(α, β): 𝔼 = β/(α − 1), σ² = αβ²/((α − 1)²(α − 2)) (ec. 17)',
+    pois: 'Poisson(λ): 𝔼(N) = σ²(N) = λ; IP(N = x) = e<sup>−λ</sup>λ<sup>x</sup>/x!',
+    nb24: 'Binomial negativa(α, θ): 𝔼(N) = α(1 − θ)/θ, σ²(N) = α(1 − θ)/θ²; IP(N = x) = Γ(x + α)/(Γ(α)x!)·θ<sup>α</sup>(1 − θ)<sup>x</sup> (ec. 24)',
+    pg29: 'λ ∼ Gamma(α, β) y N|λ ∼ Poisson(λ) ⇒ N ∼ BN(α, θ = 1/(1 + β)) (ec. 29)',
+    comp26: 'Compuesta: 𝔼(y) = 𝔼(N)𝔼(S), σ²(y) = 𝔼(N)σ²(S) + σ²(N)𝔼(S)² (ec. 26)',
+    franq: 'Franquicia d: cada siniestro paga (S − d)<sup>+</sup>; indemnización máxima L: min{S, L}; máxima anual F: min{y, F}',
+    tpt: 'Teorema de las probabilidades totales: F<sub>y</sub>(x) = IP(N = 0) + Σ<sub>n≥1</sub> IP(N = n)F<sub>y|N=n</sub>(x)',
+    panjer65: 'Panjer: IP(y = 0) = P<sub>N</sub>(IP(S = 0)); IP(y = z) = (1/(1 − cIP(S = 0)))Σ<sub>x=1</sub><sup>z</sup>(c + dx/z)IP(S = x)IP(y = z − x) (ec. 65)',
+    var31: 'VaR<sub>1−μ</sub>(−y) = percentil 1 − μ de y (ec. 31)',
+    cvar33: 'CVaR<sub>1−μ</sub>(−y) = (1/μ)∫₀<sup>μ</sup>VaR<sub>1−t</sub>(−y)dt = VaR + 𝔼((y − VaR)<sup>+</sup>)/μ (ec. 33)',
+    wcvar34: 'WCVaR = Σ kᵢ CVaR<sub>1−μᵢ</sub>, Σkᵢ = 1 (ec. 34)',
+    norm44: 'Normal: ρ(−y) = m + ρ<sub>(0,1)</sub>·s (ec. 44)',
+    norm45: 'N(0,1): VaR<sub>1−μ</sub> = Φ<sup>−1</sup>(1 − μ), CVaR<sub>1−μ</sub> = φ(Φ<sup>−1</sup>(μ))/μ (ec. 45)',
+    ln49: 'Log-normal: VaR<sub>1−μ</sub>(−y) = e<sup>m+sΦ⁻¹(1−μ)</sup>; CVaR<sub>1−μ</sub>(−y) = (e<sup>m+s²/2</sup>/μ)[1 − Φ(Φ<sup>−1</sup>(1 − μ) − s)] (ec. 49)',
+    dist35: 'Distorsión: ρ<sub>g</sub> = ∫₀¹VaR<sub>1−t</sub> g′(t)dt; Wang g(t) = Φ(Φ<sup>−1</sup>(t) + a); DPT g(t) = 1 − (1 − t)<sup>a</sup> (ec. 35)',
+    spec40: 'Espectral: ρ = ∫₀¹CVaR<sub>1−t</sub> g′(t)dt; SW<sub>a</sub>: g′(t) = exp(−aΦ<sup>−1</sup>(t) − a²/2) (ec. 36, 40)',
+    exp43: 'Expectil: 𝔼(y) = x + ((1 − 2μ)/(1 − μ))𝔼((y − x)<sup>+</sup>); 𝔈<sub>μ</sub> = −E<sub>μ</sub>, 0 < μ ≤ 1/2 (ec. 42–43)',
+    prima66: 'Principio de prima: Π(y) = (1 + k₁)𝔼(y) + k₂ρ(−y) (ec. 66)',
+    trasl: 'Invarianza por traslaciones: ρ(Π − y) = ρ(−y) − Π',
+    tcl61: 'Riesgo individual: 𝔼(Y) = Σ𝔼(yⱼ), σ²(Y) = Σσ²(yⱼ) y, por el TCL, Y ≈ normal (ec. 61)',
+    mixt27: 'Mixtura: 𝔼(y) = 𝔼(𝔼(y|Λ)), σ²(y) = 𝔼(σ²(y|Λ)) + σ²(𝔼(y|Λ)) (ec. 27)',
+    mixt28: 'Índice de mixtura: I = σ²(𝔼(y|Λ))/𝔼(σ²(y|Λ)) (ec. 28)',
+    bayes: 'Bayes: IP(tipo j | obs.) = IP(obs. | j)IP(j)/Σᵢ IP(obs. | i)IP(i)',
+    rea58: 'Reaseguro: y = y<sub>r</sub> + y<sub>c</sub>; y<sub>c</sub> = Σ aᵢ(y − Uᵢ)<sup>+</sup> (ec. 58–59)',
+    comono: 'Comonotonía: 0 ≤ a₁ + … + aₖ ≤ 1 para todo k (pendientes de y<sub>c</sub> e y<sub>r</sub> entre 0 y 1)',
+    aditiv: 'Aditividad comonótona y homogeneidad: ρ(−y<sub>c</sub>) = Σ aᵢ ρ(−(y − Uᵢ)<sup>+</sup>)',
+    slN: 'Normal: 𝔼((y − U)<sup>+</sup>) = sφ((U − m)/s) + (m − U)(1 − Φ((U − m)/s))',
+    cvarslN: 'Normal: CVaR<sub>1−μ</sub>(−(y − U)<sup>+</sup>) = (s/μ)φ(Φ<sup>−1</sup>(μ)) + m − U si VaR ≥ U; 𝔼((y − U)<sup>+</sup>)/μ si VaR < U',
+    prima71: 'Prima de la cartera: Π = ρ(−y) − R₀; con reaseguro, ρ(−y) − R₀ + (Π<sub>R</sub> − ρ(−y<sub>c</sub>)) (ec. 71, 75)',
+    k73: 'Relación de recargos: k₂ = 1 − R₀/ρ(−y) − (𝔼(y)/ρ(−y))(1 + k₁) (ec. 73)',
+    k78: 'Con reaseguro: k̃₂ = (ρ(−y<sub>r</sub>) + Π<sub>R</sub>)/ρ(−y) − R₀/ρ(−y) − (𝔼(y)/ρ(−y))(1 + k̃₁) (ec. 78)',
+    k88: 'Por póliza: k₁ igual, k₂<sup>(p)</sup> = k₂·ρ(−y)/Σρ(−yᵢ) (ec. 88)',
+    inv80: 'Inversión: B = A<sup>−1</sup>𝔼(r − r₀)/ρ<sub>(0,1)</sub>, M = 1/√(1 − BᵗAB), x = Mσ(y)B/Π, Π* = Π + ρ(R)/(1 + r₀) (ec. 79–83)',
+    mc72: 'Monte Carlo (§7.2): simular N; si N > 0 simular S₁…S<sub>N</sub> y sumar; repetir M veces; estimar 𝔼, σ, VaR (percentil) y CVaR (media de la cola)'
+  };
+
   /* ───────── Registro ───────── */
   function tema(t) { TEMAS.push(t); }
   function tool(t) { TOOLS.push(t); }
@@ -101,6 +142,8 @@ const UI = (function () {
     const r = { tiles: [], blocks: [], steps: [], keys: {}, exam: [], que: [] };
     r.ans = (lab, html) => { r.exam.push({ lab, html }); return r; };   // respuesta de examen (prosa)
     r.explain = html => { r.que.push(html); return r; };                // qué se está calculando
+    r.usa = [];
+    r.uses = (...keys) => { for (const k of keys) if (FORMULAS[k] && !r.usa.includes(k)) r.usa.push(k); return r; };
     r.tile = (l, v, o) => { r.tiles.push(Object.assign({ l, v }, o || {})); return r; };
     r.step = (title, html) => { r.steps.push({ title, html }); return r; };
     r.table = (title, head, rows, o) => { r.blocks.push(Object.assign({ k: 'table', title, head, rows }, o || {})); return r; };
@@ -214,6 +257,7 @@ const UI = (function () {
     }
     if (r.exam.length) {
       const body = h('div', { class: 'caja-examen-body' }, r.exam.map(p => h('div', { class: 'ce-p' }, p.lab ? h('span', { class: 'ce-lab', html: p.lab }) : null, h('span', { html: p.html }))));
+      if (r.usa && r.usa.length) body.append(h('div', { class: 'ce-forms' }, h('div', { class: 'ce-lab' }, 'Fórmulas utilizadas:'), h('ul', null, r.usa.map(k => h('li', { html: FORMULAS[k] })))));
       box.append(h('div', { class: 'caja-examen' },
         h('div', { class: 'caja-examen-header' }, h('span', null, 'Respuesta de examen — copia esto'),
           h('button', { class: 'ce-copy', type: 'button', onclick: e => copyText(body, e.target) }, 'Copiar respuesta')),

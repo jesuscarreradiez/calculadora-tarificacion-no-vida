@@ -142,6 +142,8 @@
       } else R.note('Para repartir los recargos entre las pólizas hace falta el riesgo ρ(−yᵢ) de cada una (columna «Riesgo»).');
 
       // ── reaseguro ──
+      R.uses('tcl61', 'norm44', 'prima71', 'k73', 'k88');
+      if (V.b('reOn')) R.uses('rea58', 'k78'); if (V.b('invOn')) R.uses('inv80');
       if (V.b('reOn')) {
         let tr; try { tr = T.parseTreaty(V.s('re')); } catch (e) { throw new Error('Reaseguro: ' + e.message); }
         const yc = V.s('reT') === 'r' ? T.plComplement(tr) : tr, yr = T.plComplement(yc);
