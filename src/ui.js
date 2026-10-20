@@ -140,10 +140,11 @@ const UI = (function () {
   /* ───────── Constructor de resultados ───────── */
   function result() {
     const r = { tiles: [], blocks: [], steps: [], keys: {}, exam: [], que: [] };
-    r.ans = (lab, html) => { r.exam.push({ lab, html }); return r; };   // respuesta de examen (prosa)
+    // respuesta de examen (prosa); lleva delante las fórmulas pendientes de r.uses()
+    r.ans = (lab, html) => { r.exam.push({ lab, html, f: r.pend.splice(0) }); return r; };
     r.explain = html => { r.que.push(html); return r; };                // qué se está calculando
-    r.usa = [];
-    r.uses = (...keys) => { for (const k of keys) if (FORMULAS[k] && !r.usa.includes(k)) r.usa.push(k); return r; };
+    r.usa = []; r.pend = [];   // fórmulas ya mostradas / pendientes para el siguiente párrafo
+    r.uses = (...keys) => { for (const k of keys) if (FORMULAS[k] && !r.usa.includes(k)) { r.usa.push(k); r.pend.push(k); } return r; };
     r.tile = (l, v, o) => { r.tiles.push(Object.assign({ l, v }, o || {})); return r; };
     r.step = (title, html) => { r.steps.push({ title, html }); return r; };
     r.table = (title, head, rows, o) => { r.blocks.push(Object.assign({ k: 'table', title, head, rows }, o || {})); return r; };
@@ -256,8 +257,11 @@ const UI = (function () {
         x.hint ? h('div', { class: 'th', html: x.hint }) : null))));
     }
     if (r.exam.length) {
-      const body = h('div', { class: 'caja-examen-body' }, r.exam.map(p => h('div', { class: 'ce-p' }, p.lab ? h('span', { class: 'ce-lab', html: p.lab }) : null, h('span', { html: p.html }))));
-      if (r.usa && r.usa.length) body.append(h('div', { class: 'ce-forms' }, h('div', { class: 'ce-lab' }, 'Fórmulas utilizadas:'), h('ul', null, r.usa.map(k => h('li', { html: FORMULAS[k] })))));
+      const body = h('div', { class: 'caja-examen-body' }, r.exam.map(p => p.f && p.f.length
+        ? h('div', { class: 'ce-p' }, p.lab ? h('div', { class: 'ce-lab', html: p.lab }) : null,
+          h('div', { class: 'ce-f' }, p.f.map(k => h('div', { html: FORMULAS[k] }))), h('div', { html: p.html }))
+        : h('div', { class: 'ce-p' }, p.lab ? h('span', { class: 'ce-lab', html: p.lab }) : null, h('span', { html: p.html }))));
+      if (r.pend.length) body.append(h('div', { class: 'ce-p ce-left' }, h('div', { class: 'ce-f' }, r.pend.map(k => h('div', { html: FORMULAS[k] })))));
       box.append(h('div', { class: 'caja-examen' },
         h('div', { class: 'caja-examen-header' }, h('span', null, 'Respuesta de examen — copia esto'),
           h('button', { class: 'ce-copy', type: 'button', onclick: e => copyText(body, e.target) }, 'Copiar respuesta')),

@@ -214,9 +214,8 @@ table.t tr.hl td{background:var(--ok-bg);font-weight:600}
 .ce-copy:hover{background:var(--accent);color:var(--on-accent)}
 .caja-examen-body{font-family:var(--serif);font-size:15px;line-height:1.7}
 .ce-p{margin:7px 0}
-.ce-forms{margin-top:12px;padding-top:8px;border-top:1px dashed var(--border-s);font-size:14px}
-.ce-forms ul{margin:4px 0 0 20px}
-.ce-forms li{margin:2px 0}
+.ce-f{margin:4px 0 6px;padding:6px 12px;border-left:3px solid var(--accent-2);background:var(--accent-ll);border-radius:4px;font-size:14.5px}
+.ce-f>div{margin:2px 0}
 .ce-lab{font-family:var(--sans);font-weight:700;font-size:13.5px;margin-right:6px;color:var(--text)}
 .caja-examen-body .eq{font-family:var(--serif);background:var(--surface-2);border-left:3px solid var(--tc,var(--accent));padding:5px 10px;margin:5px 0;border-radius:0 5px 5px 0;overflow-x:auto}
 .caja-examen-body .v{font-family:var(--mono);font-size:13.5px;font-weight:700;color:var(--accent)}

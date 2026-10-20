@@ -23,6 +23,7 @@ const { chromium } = require('playwright');
         const res = document.querySelector('.res');
         const err = res.querySelector('.err');
         if (err) return 'ERROR: ' + err.innerText;
+        if (res.querySelector('.ce-left')) return 'FORMULAS SUELTAS: ' + res.querySelector('.ce-left').innerText.slice(0, 80);
         const tb = [...res.querySelectorAll('h3')].find(h => h.textContent.includes('Comparación con'));
         if (!tb) return 'ok (sin comparación)';
         const rows = [...tb.nextElementSibling.querySelectorAll('tr')].slice(1).map(r => [...r.children].map(c => c.innerText).slice(0, 4).join(' | '));

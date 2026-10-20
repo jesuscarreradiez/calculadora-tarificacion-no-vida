@@ -51,7 +51,7 @@ Junio 2023–2026, Enero 2014–2020, 2022–2026 (16 convocatorias; 2014–2016
 engine.js (numérica, distribuciones, medidas, FFT/Panjer, MC) · ui.js (formularios declarativos, resultados, navegación lateral) · pickers.js (selectores) · tools.js (temas y herramientas + ejemplos de examen) · home.js (inicio e índice de exámenes) · build.py → dist/Calculadora_Tarificacion_No_Vida.html · test/e2e.js (ejecuta todos los ejemplos).
 
 ## Revisión T1–T5 (fórmulas utilizadas)
-- Cada herramienta añade al final de la caja de examen «Fórmulas utilizadas» (diccionario `FORMULAS` en ui.js, `R.uses(...)` en cada solve; `MK(tipo)` da la clave de la medida).
+- En la caja de examen, cada párrafo lleva encima (recuadro azul) la fórmula general que usa y debajo la explicación con los números. `R.uses(...)` deja fórmulas pendientes y el siguiente `R.ans(...)` las muestra (diccionario `FORMULAS` en ui.js; `MK(tipo)` da la clave de la medida). Nada de lista final de fórmulas.
 - t3-agregado: segunda prima (a₂, b₂), prima de referencia (reducción a posteriori), umbral de Panjer, relación k₁–k₂, modelo de simulación.
 - t5-reaseguro: precio por componentes y párrafo de aditividad (Enero 2014/2015 Ej. 5).
 - t3-mixtura: párrafo de simulación (Junio 2025 Ej. 4a).

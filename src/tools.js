@@ -280,9 +280,10 @@
       else if (t === 'binneg') { const th = V.n('th', { prob: 1 }); N = T.negbin(s, th); txt = `La suma de BN independientes con el mismo θ es BN(Σαᵢ = ${vv(s)}; θ = ${f(th)}) (§2.3.1).`; }
       else { const p = V.n('p', { prob: 1 }); N = T.binomial(s, p); txt = `La suma de binomiales independientes con el mismo p es Bin(Σnᵢ = ${vv(s)}; p = ${f(p)}).`; }
       R.step('Distribución de la suma', txt);
+      R.uses(t === 'poisson' ? 'pois' : t === 'binneg' ? 'nb24' : null);
       R.ans('', `${txt} Por tanto 𝔼(N) = ${vv(N.mean)} y σ²(N) = ${vv(N.var)}.`);
       R.tile('𝔼(N)', N.mean, { main: true }).tile('σ²(N)', N.var, { main: true }).tile('IP(N = 0)', N.pmf(0));
-      R.key('E', N.mean).key('V', N.var); R.uses(t === 'poisson' ? 'pois' : t === 'binneg' ? 'nb24' : null);
+      R.key('E', N.mean).key('V', N.var);
       return R;
     }
   });
@@ -355,9 +356,6 @@
       if (Nb.mode === 'pg') R.uses('pg29');
       if (Sb.fam === 'lognormal') R.uses('ln67'); if (Sb.fam === 'gamma' || Sb.fam === 'exponencial') R.uses('gam12');
       R.uses('comp26'); if (d > 0 || L !== null || F !== null) R.uses('franq');
-      R.uses(MK(sp.type));
-      R.uses(r.unit ? 'panjer65' : 'mc72');
-      if (A !== 1 || B !== 0) R.uses('prima66', 'trasl');
 
       R.step('Frecuencia N', Nb.ex);
       R.step('Severidad S', Sb.ex);
@@ -384,10 +382,14 @@
         R.ans('Media y desviación.', `${Nb.ex} ${Sb.ex}${modTxt} Por (26):` +
           eq(`𝔼(y) = 𝔼(N)𝔼(${S_}) = ${f(r.EN)} × ${f(r.EP)} = ${vv(r.Ey)}<br>σ(y) = √(𝔼(N)σ²(${S_}) + σ²(N)𝔼(${S_})²) = √(${f(r.EN)} × ${f(r.VP)} + ${f(r.VN)} × ${f(r.EP)}²) = ${vv(r.sdy)}`) +
           (F !== null ? `Como la compañía paga como máximo ${f(F)} al año, la indemnización es min{y, ${f(F)}}, de media ${vv(D.mean)} y desviación ${vv(D.sd)}.` : ''));
+        R.uses(MK(sp.type)); if (r.unit && !(Nb.D.ab && F === null)) R.uses('panjer65');
         R.ans(`${RN}.`, `No existe fórmula cerrada para la distribución de y, así que hay que recurrir a métodos numéricos (método de Panjer tras discretizar la severidad, o simulación de Monte Carlo). Se obtiene ${RN} = ${vv(rho)}${sp.type === 'CVaR' ? ` (con VaR<sub>${level(sp)}</sub>(−y) = ${vv(D.VaR(sp.mu))})` : ''}.`);
+        R.uses('mc72');
         R.ans('Modelo de simulación (si lo piden).', `Paso 1: generar una realización de N (${Nb.fam === 'poisson' ? 'Poisson' : Nb.fam === 'tabla' ? 'según su tabla' : 'binomial negativa'}). Paso 2: si N = 0, y = 0. Paso 3: si N > 0, generar S₁, …, S<sub>N</sub> independientes${Sb.fam === 'lognormal' ? ' (S = e<sup>m+sZ</sup>, Z ∼ N(0,1))' : Sb.fam === 'exponencial' ? ' (S = −β·log(1 − U), U uniforme)' : ''}${mods ? ' y aplicar ' + (d > 0 ? `la franquicia (S − ${f(d)})<sup>+</sup>` : '') + (d > 0 && L !== null ? ' y ' : '') + (L !== null ? `el límite min{·, ${f(L)}}` : '') : ''}, y tomar y = Σ Sᵢ${F !== null ? `, min{y, ${f(F)}}` : ''}. Paso 4: repetir M veces (p. ej. 100.000). Con la muestra ordenada, 𝔼(y) y σ(y) son la media y la desviación muestrales, el VaR es el percentil y el CVaR es la media de los ${sp.mu ? T.fmtPctLevel(sp.mu) : 'μ%'} peores valores (§7.2).`);
         if (A !== 1 || B !== 0) {
+          R.uses('prima66');
           R.ans('Prima.', `Π(y) = ${f(A)}·𝔼(y) + ${f(B)}·${RN} = ${f(A)} × ${f(Ey)} + ${f(B)} × ${f(rho)} = ${vv(Pi)}.`);
+          R.uses('trasl');
           R.ans('Riesgo del asegurador.', `Por la invarianza por traslaciones, ${rn(sp, 'Π(y) − y')} = ${RN} − Π(y) = ${f(rho)} − ${f(Pi)} = ${vv(rho - Pi)}.` +
             (rho - Pi > 0 ? ` El asegurador acepta una prima que le deja un riesgo tan superior a cero porque ese riesgo se mitiga diversificando con otros asegurados: tras cobrar las primas, el riesgo global de la cartera debe ser nulo o negativo.` : ` La prima cubre el riesgo de la póliza.`));
         }
@@ -467,6 +469,7 @@
           eq(`IP(y = 0) = P<sub>N</sub>(IP(S = 0)) = ${vv(g0)}`) +
           eq(`IP(y = z) = (1/(1 − c·IP(S = 0))) Σ<sub>x=1</sub><sup>z</sup> (c + d·x/z)·IP(S = x)·IP(y = z − x)`) +
           eq(`IP(y = ${f(u)}) = (c + d)·IP(S = 1)·IP(y = 0)/(1 − c·IP(S = 0)) = ${vv(g1)}`) + 'La tabla siguiente recoge los primeros valores.');
+        R.uses('panjer65');
         R.ans('Fórmula de Panjer.', `Con la unidad monetaria ${f(u)}, N pertenece a la clase (c, d, 0) con c = ${f(c)}, d = ${f(dd)}. La recursión IP(y = z) = (1/(1 − c·IP(S = 0)))Σ<sub>x=1</sub><sup>z</sup>(c + dx/z)IP(S = x)IP(y = z − x), partiendo de IP(y = 0) = ${f(g0)}, da: ${rows.slice(1, Uthr !== null ? rows.length : 10).map(r0 => `IP(y = ${r0[0]}) = ${f(r0[1])}`).join('; ')}.${Uthr !== null ? ` Como IP(y > ${f(Uthr)}) = ${f(1 - rows.find(x => x[0] === f(Uthr))[2])} ≤ ${f(pthr)}, basta llegar hasta U = ${f(Uthr)}.` : ''}`);
       }
       // Distribución explícita de y cuando N toma pocos valores (Teorema de las probabilidades totales)
@@ -496,6 +499,7 @@
       const n = V.nOpt('n'), eN0 = V.nOpt('epsN');
       if (n !== null || eN0 !== null) {
         const r01 = T.rhoStd(sp);
+        R.uses('tcl61', 'norm45');
         let html = 'Por el Teorema Central del Límite, la cartera de n pólizas independientes es aproximadamente normal (teoría del riesgo individual, tema 6).';
         if (n !== null) {
           const c = normalCartera(n, Ey, sdy, sp, (A !== 1 || B !== 0) ? Pi : null);
@@ -523,7 +527,6 @@
             R.ans('Número mínimo de pólizas.', `Con n pólizas la siniestralidad es aproximadamente N(n𝔼(y); √n σ(y)). La compañía pierde dinero con probabilidad 1 − Φ(√n(Π − 𝔼(y))/σ(y)) ≤ ${pct(eN)} si √n ≥ ${f(sdy)} × ${f(z, 8)}/${f(Pi - Ey)}, es decir, n ≥ ${f((sdy * z / (Pi - Ey)) ** 2)}: el mínimo es <b>n = ${n1}</b>. Para que ${rn(sp, 'nΠ − Y')} = n(𝔼(y) − Π) + √n σ(y)·${f(r01)} ≤ 0 hace falta n ≥ ${f((sdy * r01 / (Pi - Ey)) ** 2)}: el mínimo es <b>n = ${n2}</b>.`);
           }
         }
-        R.uses('tcl61', 'norm45');
         R.step('Cartera de n pólizas independientes', html);
       }
       if (r.mcDist) {
@@ -673,10 +676,11 @@
       R.step('Índice de mixtura (ec. 28)', eq(`I = σ²(𝔼(y|Λ))/𝔼(σ²(y|Λ)) = ${f(Ve)}/${f(Ev)} = ${vv(I)}`) +
         `Algunos enunciados llaman «índice de mixtura» al cociente inverso, media de varianzas entre varianza de medias: 1/I = ${f(Ev)}/${f(Ve)} = ${vv(1 / I)} (es el h̃ de la credibilidad de Bühlmann). ` +
         `Cuanto menor es I, más homogénea es la población (las medias condicionadas apenas varían) y menos necesario es un sistema <i>bonus–malus</i>. I no tiene unidades.`);
+      R.uses('mixt27');
       R.ans('Esperanza.', `Como y es una mixtura, 𝔼(y) = 𝔼(𝔼(y|Λ)) = ${c1 !== 1 ? f(c1) + '·' : ''}𝔼(Λ)${c0 ? ' + ' + f(c0) : ''} = ${vv(Ey)}.`);
       R.ans('Varianza.', `σ²(y) = 𝔼(σ²(y|Λ)) + σ²(𝔼(y|Λ)), con ${C.txt}. Como 𝔼(Λ) = ${f(EL)} y 𝔼(Λ²) = ${f(EL2)}, se obtiene 𝔼(σ²(y|Λ)) = ${vv(Ev)} y σ²(𝔼(y|Λ)) = ${vv(Ve)}, luego σ²(y) = ${vv(Vy)} y σ(y) = ${vv(Math.sqrt(Vy))}.`);
+      R.uses('mixt28');
       R.ans('Índice de mixtura.', `I = σ²(𝔼(y|Λ))/𝔼(σ²(y|Λ)) = ${f(Ve)}/${f(Ev)} = ${vv(I)}. ${I < 0.1 ? 'Es pequeño: la cartera es bastante homogénea.' : 'Indica una heterogeneidad apreciable entre asegurados, que justifica un sistema <i>bonus–malus</i>.'}`);
-      R.uses('mixt27', 'mixt28'); if (V.s('cond') === 'poisson' && Lb.fam === 'gamma') R.uses('pg29');
       R.ans('Simulación (si la piden).', `Para simular y: (1) se genera un valor λ de Λ (${Lb.ex.split(':')[0].replace(/<[^>]+>/g, '')}) — p. ej. por inversión, λ = F<sub>Λ</sub><sup>−1</sup>(u) con u ∼ U(0, 1)${Lb.fam === 'normal' ? ', descartando valores no positivos' : ''}; (2) dado λ, se genera y|λ (${C.lab}), p. ej. también por inversión con otro uniforme independiente; (3) se repite M veces (p. ej. M = 100.000) y se estiman 𝔼(y) y σ(y) con la media y la desviación muestrales, y el índice de mixtura con I = σ²(𝔼(y|Λ))/(σ̂²(y) − σ²(𝔼(y|Λ))).`);
       if (V.s('cond') === 'poisson' && Lb.fam === 'gamma') R.note(`Poisson–Gamma: N ∼ BN(α = ${f(Lam.al)}; θ = 1/(1+β) = ${f(1 / (1 + Lam.be))}) y el índice de mixtura es β = ${f(Lam.be)} (ec. 29).`);
       if (Lb.fam === 'normal' && Lam.cdf(0) > 1e-6) R.warn(`Λ normal toma valores negativos con probabilidad ${f(Lam.cdf(0))}; el cálculo usa sólo sus momentos.`);
@@ -836,9 +840,7 @@
       R.table('Resultados', src.normal ? ['#', 'Medida', 'ρ<sub>(0,1)</sub>', 'ρ(−y)', 'Nivel de VaR equivalente Φ(ρ<sub>(0,1)</sub>)'] : ['#', 'Medida', 'ρ(−y)'], rows, { top: true });
       specs.forEach((sp, i) => R.key('r' + (i + 1), vals[i]).key('s' + (i + 1), src.normal && sp.type !== 'Entropica' ? T.rhoStd(sp) : null));
       R.tile('𝔼(y)', D.mean).tile('σ(y)', D.sd);
-      if (V.s('y_src') === 'cartera') R.uses('tcl61'); else if (V.s('y_src') === 'compuesta') R.uses('comp26');
-      if (src.normal) R.uses('norm44', 'norm45');
-      specs.forEach(sp => R.uses(MK(sp.type)));
+      let cvAns = null;
       specs.slice(0, 4).forEach((sp, i) => R.tile(rn(sp), vals[i], { main: true }));
       if (src.normal) {
         R.step('Riesgo de una normal (ec. 44)', `Todas estas medidas (salvo la entrópica) son invariantes por traslaciones y homogéneas, luego` + eq(`ρ(−y) = m + ρ<sub>(0,1)</sub>·s = ${f(src.m)} + ρ<sub>(0,1)</sub> × ${f(src.s)}`) + 'donde ρ<sub>(0,1)</sub> es el riesgo de la N(0,1).');
@@ -850,7 +852,7 @@
           R.step('CVaR en función de μ y su sensibilidad', eq(`CVaR<sub>1−μ</sub>(−y) = m + s·φ(Φ<sup>−1</sup>(μ))/μ = ${f(src.m)} + ${f(src.s)}·φ(Φ<sup>−1</sup>(μ))/μ`) +
             eq(`∂CVaR<sub>1−μ</sub>(−y)/∂μ = −s·(μΦ<sup>−1</sup>(μ) + φ(Φ<sup>−1</sup>(μ)))/μ² < 0`) +
             eq(cv.map(sp => `μ = ${f(sp.mu)}: ∂CVaR/∂μ = ${vv(sens(sp.mu))}`).join('<br>')) + 'El CVaR decrece al aumentar μ (al bajar el nivel de confianza 1 − μ); la sensibilidad es mayor cuanto menor es μ.');
-          R.ans('CVaR en función de μ.', `Para la normal, CVaR<sub>1−μ</sub>(−y) = ${f(src.m)} + ${f(src.s)}·φ(Φ<sup>−1</sup>(μ))/μ, con derivada −s(μΦ<sup>−1</sup>(μ) + φ(Φ<sup>−1</sup>(μ)))/μ², negativa: ${cv.map(sp => `en μ = ${f(sp.mu)} vale ${vv(sens(sp.mu))}`).join('; ')}.`);
+          cvAns = () => R.ans('CVaR en función de μ.', `Para la normal, CVaR<sub>1−μ</sub>(−y) = ${f(src.m)} + ${f(src.s)}·φ(Φ<sup>−1</sup>(μ))/μ, con derivada −s(μΦ<sup>−1</sup>(μ) + φ(Φ<sup>−1</sup>(μ)))/μ², negativa: ${cv.map(sp => `en μ = ${f(sp.mu)} vale ${vv(sens(sp.mu))}`).join('; ')}.`);
         }
         if (cv.length) R.table('PELVE: CVaR<sub>1−μ</sub> = VaR<sub>1−ν</sub> en el mundo normal (§4.3.1)', ['CVaR', 'ν = Φ(−φ(Φ<sup>−1</sup>(μ))/μ)', 'Nivel equivalente del VaR'], cv.map(sp => { const nu = T.Phi(-T.phi(T.PhiInv(sp.mu)) / sp.mu); return [rn(sp), nu, T.fmtPctLevel(1 - nu)]; }));
       } else specs.forEach((sp, i) => R.step(rn(sp), eq(P.genExplain(sp, D, vals[i], src.kind))));
@@ -859,9 +861,12 @@
         const z = T.risk(D, ex);
         R.table(`Cota (56) del CVaR mediante el expectil 𝔈<sub>${f(ex.mu)}</sub>`, ['CVaR', 'Cota: 𝔈 + μ(𝔈 − 𝔼(y))/(ν(1 − 2μ))', 'Valor real'], cvs.map(sp => [rn(sp), z + ex.mu * (z - D.mean) / (sp.mu * (1 - 2 * ex.mu)), T.risk(D, sp)]));
       }
+      if (V.s('y_src') === 'cartera') R.uses('tcl61'); else if (V.s('y_src') === 'compuesta') R.uses('comp26');
+      if (src.normal) R.uses('norm44');
       if (src.normal) R.ans('', `${src.ex.replace(/<div class="eq">/g, '<div class="eq">')} Las medidas invariantes por traslaciones y homogéneas cumplen ρ(−y) = m + ρ<sub>(0,1)</sub>·s (ec. 44), donde ρ<sub>(0,1)</sub> es el riesgo de la normal estándar:`);
       else R.ans('', src.ex);
-      specs.forEach((sp, i) => R.ans('', src.normal && sp.type !== 'Entropica' ? `${P.std01Explain(sp)}${src.m !== 0 || src.s !== 1 ? `, de donde ${rn(sp)} = ${f(src.m)} + ${f(T.rhoStd(sp))} × ${f(src.s)} = ${vv(vals[i])}` : ''}.` : `${P.genExplain(sp, D, vals[i], src.kind)}.`));
+      specs.forEach((sp, i) => R.uses(src.normal && sp.type !== 'Entropica' ? 'norm45' : null, MK(sp.type)) && R.ans('', src.normal && sp.type !== 'Entropica' ? `${P.std01Explain(sp)}${src.m !== 0 || src.s !== 1 ? `, de donde ${rn(sp)} = ${f(src.m)} + ${f(T.rhoStd(sp))} × ${f(src.s)} = ${vv(vals[i])}` : ''}.` : `${P.genExplain(sp, D, vals[i], src.kind)}.`));
+      if (cvAns) cvAns();
       if (V.b('pr')) {
         const A = V.n('A'), B = V.n('B'), k = Math.round(V.n('prow'));
         if (!(k >= 1 && k <= specs.length)) throw new Error('El nº de fila de la prima no existe.');
@@ -1023,8 +1028,6 @@
         (Math.abs(yc.a0) > 1e-15 ? eq(`${rn(sp)} = ${f(rhoY)}`) : '') + parts.map(p => eq(P.layerFormula(src, sp, p.l.U, p.v))).join('');
       R.step(`Tratado ${idx}: riesgo cedido`, t);
     } else R.step(`Tratado ${idx}: riesgo cedido`, eq(`${rn(sp, '−y<sub>c</sub>')} = ${vv(rhoc)}`) + (T.comonotoneAdditive(sp) ? '' : `(${rn(sp)} no es comonótona aditiva: se calcula directamente sobre la distribución de y<sub>c</sub>).`));
-    R.uses('rea58', 'comono'); if (add) R.uses('aditiv'); if (src.normal && yc.layers.length) R.uses('slN'); if (src.normal && yc.layers.length && sp.type === 'CVaR') R.uses('cvarslN');
-    R.uses(MK(sp.type), 'prima71');
     const comps = [...(Math.abs(yc.a0) > 1e-15 ? [{ a: yc.a0, U: null }] : []), ...yc.layers.map(l => ({ a: l.a, U: l.U }))];
     let addAns = null;
     if (add && comps.length > 1) {
@@ -1050,15 +1053,18 @@
       eq(`Recargos máximos de la cartera (avance del tema 8): seguridad (k₂ = 0) = Π/𝔼(y) − 1 = ${vv(prima / EY - 1)}; riesgo (k₁ = 0) = (Π − 𝔼(y))/${rn(sp)} = ${vv((prima - EY) / rhoY)}; riesgo (k₁ = −1) = Π/${rn(sp)} = ${vv(prima / rhoY)}`));
     {
       const pre = idx > 1 || R.__multi ? `Tratado ${idx}. ` : '';
+      R.uses('rea58', 'comono');
       R.ans(pre + 'Estructura.', `El riesgo cedido es ${lab} y el retenido y<sub>r</sub> = ${T.treatyToString(yr)}. Sus pendientes son ${slopes.map(x => `${f(x.slope)} (cedido) y ${f(1 - x.slope)} (retenido) ${isFinite(x.to) ? 'si y < ' + f(x.to) : (x.from > 0 ? 'si y > ' + f(x.from) : '')}`).join('; ')}. ${como ? 'Como todas están entre cero y uno, riesgo retenido, riesgo cedido y riesgo global son comonótonos.' : 'Alguna pendiente no está entre 0 y 1: no se cumple la comonotonía.'}`);
       let t = `𝔼(y<sub>c</sub>) = ${vv(Eyc)}`;
       if (yc.layers.length) t = `Como ${yc.layers.map(l => `𝔼((y − ${f(l.U)})<sup>+</sup>) = ${f(D.SL(l.U))}`).join(' y ')}${src.normal ? ' (fórmula cerrada 𝔼((y − U)<sup>+</sup>) = sφ((U−m)/s) + (m − U)(1 − Φ((U−m)/s)))' : ''}, se obtiene ${t}.`;
       else t += '.';
       if (add) t += ` Por la aditividad comonótona y la homogeneidad, ${rn(sp, '−y<sub>c</sub>')} = ${[Math.abs(yc.a0) > 1e-15 ? `${f(yc.a0)} × ${f(rhoY)}` : '', ...yc.layers.map(l => `${l.a < 0 ? '− ' + f(-l.a) : f(l.a)} × ${f(T.layerRisk(D, sp, l.U))}`)].filter(Boolean).join(' + ').replace(/\+ −/g, '−')} = ${vv(rhoc)}.`;
       else t += ` Calculando sobre la distribución de y<sub>c</sub>, ${rn(sp, '−y<sub>c</sub>')} = ${vv(rhoc)}.`;
+      if (src.normal && yc.layers.length) R.uses('slN'); if (add) R.uses('aditiv'); if (src.normal && yc.layers.length && sp.type === 'CVaR') R.uses('cvarslN');
       R.ans(pre + 'Riesgo cedido.', t);
+      R.uses('prima71');
       R.ans(pre + 'Primas.', `La prima a pagar por el reaseguro es Π<sub>r</sub> = ${f(1 + k1r)} × ${f(Eyc)}${k2r ? ` + ${f(k2r)} × ${f(rhoc)}` : ''} = ${vv(Pr)}, así que la prima del reaseguro menos el riesgo cedido es ${f(Pr)} − ${f(rhoc)} = ${vv(net)}. La prima a cobrar por toda la cartera si se compra el reaseguro será ${f(rhoY)}${R0 ? ' − ' + f(R0) : ''} ${net < 0 ? '−' : '+'} ${f(Math.abs(net))} = ${vv(prima)}${add ? ` (equivalentemente, riesgo retenido + prima del reaseguro = ${f(rhor)} + ${f(Pr)})` : ''}. ${prima < rhoY - R0 ? 'El reaseguro abarata la prima de la cartera.' : 'El reaseguro encarece la prima de la cartera.'}`);
-      if (addAns) addAns();
+      if (addAns) { R.uses('aditiv'); addAns(); }
       R.ans(pre + 'Pérdidas de la reaseguradora.', `La reaseguradora pierde dinero si la siniestralidad cedida supera lo que cobra: IP(y<sub>c</sub> > ${f(Pr)}) = ${vv(plr)}.`);
       R.ans(pre + 'Recargos máximos.', `El recargo de seguridad máximo será (${f(prima)} − ${f(EY)})/${f(EY)} = ${vv(prima / EY - 1)}; el recargo máximo por riesgo (con recargo de seguridad nulo) será (${f(prima)} − ${f(EY)})/${f(rhoY)} = ${vv((prima - EY) / rhoY)}, y para un recargo de seguridad igual a −1, ${f(prima)}/${f(rhoY)} = ${vv(prima / rhoY)}.`);
     }
@@ -1099,7 +1105,7 @@
       R.step('Siniestralidad de la cartera', src.ex + (src.normal ? eq(P.std01Explain(sp)) + eq(`${rn(sp)} = ${f(src.m)} + ${f(T.rhoStd(sp))} × ${f(src.s)} = ${vv(rhoY)}`) : eq(P.genExplain(sp, D, rhoY, src.kind))) +
         `Sin reaseguro, la prima de la cartera (ec. 71) es ${rn(sp)}${R0 ? ' − R₀' : ''} = ${vv(rhoY - R0)}.`);
       R.key('rhoY', rhoY).key('E', EY);
-      if (V.s('y_src') === 'cartera') R.uses('tcl61'); if (src.normal) R.uses('norm44', 'norm45');
+      if (V.s('y_src') === 'cartera') R.uses('tcl61'); if (src.normal) R.uses('norm44', 'norm45'); R.uses(MK(sp.type));
       R.__multi = trs.length > 1;
       R.ans('Cartera.', `${src.normal ? `La siniestralidad de la cartera es normal de media ${f(src.m)} y desviación ${f(src.s)} (teoría del riesgo individual). Con ρ<sub>(0,1)</sub> = ${f(T.rhoStd(sp))}, ${rn(sp)} = ${f(src.m)} + ${f(T.rhoStd(sp))} × ${f(src.s)} = ${vv(rhoY)}` : `${rn(sp)} = ${vv(rhoY)}`}, que sería la prima de la cartera sin reaseguro${R0 ? ' (descontadas las reservas, ' + f(rhoY - R0) + ')' : ''}.`);
       const res = trs.map((t, i) => {

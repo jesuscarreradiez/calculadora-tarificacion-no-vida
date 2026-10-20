@@ -112,6 +112,7 @@
       R.step('Relación entre recargos (ec. 73)', eq(`k₂ = 1 − R₀/${rn(sp)} − (𝔼(y)/${rn(sp)})(1 + k₁) ⇒ ${relTxt(0)}`) +
         eq(`k₂ = 0 ⇒ k₁ = Π/𝔼(y) − 1 = ${vv(e0.k1)} &nbsp;&nbsp; k₁ = 0 ⇒ k₂ = (Π − 𝔼(y))/${rn(sp)} = ${vv(e0.k2)} &nbsp;&nbsp; (k₁ = −1 ⇒ k₂ = ${f(e0.k2m1)})`) +
         `Los recargos válidos son los pares (k₁, k₂) de esa recta con k₁ entre 0 y ${f(e0.k1)} y k₂ entre 0 y ${f(e0.k2)}. La ratio de sustitución es ${f(ratio)}: cada punto de k₁ equivale a ${f(ratio)} puntos de k₂.`);
+      R.uses(rows ? 'tcl61' : null, 'norm44', 'prima71', 'k73');
       R.ans('Prima y recargos de la cartera.', `${rows ? `La siniestralidad de la cartera es normal de media ${f(m)} y desviación ${f(s)}.` : ''} Como ${rn(sp)} = ${f(m)} + ${f(r01)} × ${f(s)} = ${vv(rho)}, la prima de la cartera es Π = ${vv(P0)} y la relación entre recargos es` + eq(`${relTxt(0)}`) +
         `Por tanto, los recargos extremos son (k₁; k₂) = (${vv(e0.k1)}; 0) y (0; ${vv(e0.k2)}). Ambos conducen a la misma prima: ${f(m)} × (1 + ${f(e0.k1)}) = ${f(m)} + ${f(e0.k2)} × ${f(rho)} = ${f(P0)}.`);
       const k1g = V.nOpt('k1');
@@ -136,14 +137,13 @@
         R.step('Recargos de cada póliza (ec. 88)', `El recargo de seguridad es el mismo para todas las pólizas; el recargo por riesgo se multiplica por la ratio de riesgo no eliminada por la diversificación:` +
           eq(`ρ(−y)/Σ nᵢρ(−yᵢ) = ${f(rho)}/${rows ? rows.map(r => `${f(r.n)}·${f(r.r)}`).join(' + ') : f(sumR)} = ${f(rho)}/${f(sumR)} = ${vv(c)}`) +
           eq(`Pólizas: (k₁; k₂) = (${vv(e0.k1)}; 0) y (0; ${f(e0.k2)} × ${f(c)}) = (0; ${vv(k2p)}); ratio de sustitución por póliza ${f(ratio)} × ${f(c)} = ${f(ratio * c)}`));
+        R.uses('k88');
         R.ans('Recargos y primas de cada póliza.', `El recargo de seguridad máximo de cada póliza sigue siendo ${vv(e0.k1)}, y el recargo por riesgo máximo se obtiene multiplicando ${f(e0.k2)} por ${f(rho)}/${f(sumR)} = ${f(c)}, es decir, k₂ = ${vv(k2p)}. ${rows ? 'Las primas de cada tipo de póliza son: ' + rows.map((r, i) => `tipo ${i + 1}: ${f((1 + e0.k1) * r.E)} (con k₁) y ${f(r.E + k2p * r.r)} (con k₂)`).join('; ') + '.' : ''}`);
         polTable('Primas por póliza sin reaseguro', e0.k1, e0.k2);
         if (rows) rows.forEach((r, i) => R.key('pk1_' + (i + 1), (1 + e0.k1) * r.E).key('pk2_' + (i + 1), r.E + k2p * r.r));
       } else R.note('Para repartir los recargos entre las pólizas hace falta el riesgo ρ(−yᵢ) de cada una (columna «Riesgo»).');
 
       // ── reaseguro ──
-      R.uses('tcl61', 'norm44', 'prima71', 'k73', 'k88');
-      if (V.b('reOn')) R.uses('rea58', 'k78'); if (V.b('invOn')) R.uses('inv80');
       if (V.b('reOn')) {
         let tr; try { tr = T.parseTreaty(V.s('re')); } catch (e) { throw new Error('Reaseguro: ' + e.message); }
         const yc = V.s('reT') === 'r' ? T.plComplement(tr) : tr, yr = T.plComplement(yc);
@@ -161,6 +161,7 @@
         R.step('Nueva relación de recargos (ec. 78)', eq(`(Π<sub>R</sub> − ${rn(sp, '−y<sub>c</sub>')})/${rn(sp)} = (${f(PR)} − ${f(rhoc)})/${f(rho)} = ${vv(shift)}`) +
           eq(relTxt(shift)) + eq(`k₂ = 0 ⇒ k₁ = ${vv(e1.k1)}; &nbsp; k₁ = 0 ⇒ k₂ = ${vv(e1.k2)}; &nbsp; prima de la cartera = ${f(rho)} ${PR - rhoc < 0 ? '−' : '+'} ${f(Math.abs(PR - rhoc))} = ${vv(Pt)}`) +
           (conv ? '<span class="okb">El reaseguro conviene</span> (ec. 77): Π<sub>R</sub> < ρ(−y<sub>c</sub>), así que la prima baja.' : '<span class="badb">El reaseguro no conviene</span>: Π<sub>R</sub> ≥ ρ(−y<sub>c</sub>), la prima sube.'));
+        R.uses('rea58', 'k78');
         R.ans('Con reaseguro.', `El riesgo cedido es y<sub>c</sub> = ${T.treatyToString(yc)}, con 𝔼(y<sub>c</sub>) = ${f(Eyc)} y ${rn(sp, '−y<sub>c</sub>')} = ${f(rhoc)}. El precio del reaseguro será ${f(1 + k1r)} × ${f(Eyc)} + ${f(k2r)} × ${f(rhoc)} = ${vv(PR)}. Por consiguiente, las relaciones entre los recargos son las anteriores ${shift < 0 ? 'menos' : 'más'} (${f(PR)} − ${f(rhoc)})/${f(rho)} = ${f(Math.abs(shift))}, es decir,` + eq(relTxt(shift)) +
           `Se obtiene (k₁; k₂) = (${vv(e1.k1)}; 0) y (0; ${vv(e1.k2)}). La prima de la cartera será ${f(rho)} ${PR - rhoc < 0 ? '−' : '+'} ${f(Math.abs(PR - rhoc))} = ${vv(Pt)}${c ? `, y para cada póliza k₂ se multiplica por ${f(c)}: k₂ = ${vv(e1.k2 * c)}` : ''}. ${conv ? 'El reaseguro abarata la prima, así que conviene a la cedente.' : 'El reaseguro encarece la prima.'}`);
         if (c) { R.key('k2Rep', e1.k2 * c); polTable('Primas por póliza con reaseguro', e1.k1, e1.k2); }
@@ -207,6 +208,7 @@
           eq(`Π* = Π + ρ(R)/(1 + r₀) = ${f(P0)} ${first.rr < 0 ? '−' : '+'} ${f(Math.abs(first.rr))}/${f(1 + r0)} = ${vv(first.Pn)}`) +
           (V.b('iter') ? `Repitiendo el cálculo con la nueva prima (${it.length} iteraciones) el riesgo global se anula: Π* = ${vv(last.Pn)}, ${wtxt(last)}.` : '') +
           eq(`Nuevos recargos: k₂ = 0 ⇒ k₁ = ${vv(e2.k1)}; &nbsp; k₁ = 0 ⇒ k₂ = ${vv(e2.k2)}${c ? ` (por póliza ${f(e2.k2 * c)})` : ''}`));
+        R.uses('inv80');
         R.ans('Inversión de las primas.', `Con las notaciones del curso, B = (1/ρ<sub>(0,1)</sub>)A<sup>−1</sup>𝔼(r − r₀) = (${B.map(v => f(v)).join('; ')}), M = ${f(M)} y x = Mσ(y)B/Π, de donde la estrategia óptima de inversión es ${wtxt(first)}. El riesgo global actuarial/financiero es ρ(R) = ${vv(first.rr)}, por lo que la prima ${first.rr < 0 ? 'puede reducirse' : 'debe aumentar'} hasta Π* = ${f(P0)} ${first.rr < 0 ? '−' : '+'} ${f(Math.abs(first.rr))}${r0 ? '/' + f(1 + r0) : ''} = ${vv(first.Pn)}${V.b('iter') ? ` (iterando hasta riesgo nulo: ${vv(last.Pn)})` : ''}. Los recargos saldrán de (1 + k₁)${f(m)} + ${f(rho)}k₂ = ${f(Pf)}: k₂ = 0 ⇒ k₁ = ${vv(e2.k1)}; k₁ = 0 ⇒ k₂ = ${vv(e2.k2)}${c ? `; por póliza, k₂ = ${f(e2.k2)} × ${f(c)} = ${vv(e2.k2 * c)}` : ''}.`);
       }
       return R;
