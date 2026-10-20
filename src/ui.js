@@ -291,8 +291,8 @@ const UI = (function () {
     const nEx = TOOLS.reduce((a, t) => a + (t.examples || []).length, 0);
     NAV.append(navItem('Ejercicios de examen', { ico: '📄', on: state.tema === 'ex', badge: String(nEx), go: () => go('ex') }));
     NAV.append(h('div', { class: 'nv-sec' }, 'Temario'));
-    for (const tm of TEMAS) {
-      if (tm.off) { NAV.append(h('div', { class: 'nv-grp off' }, h('span', { class: 'nv-num' }, '6–13'), h('span', null, 'Próximamente'))); continue; }
+    for (const tm of [...TEMAS].sort((a, b) => a.n - b.n)) {
+      if (tm.off) { NAV.append(h('div', { class: 'nv-grp off' }, h('span', { class: 'nv-num' }, tm.offLabel || ''), h('span', null, 'Próximamente'))); continue; }
       const open = state.tema === tm.n;
       const grp = h('div', { class: 'nv-grp' + (open ? ' open' : ''), style: { '--tc': tm.color } },
         h('button', { type: 'button', class: 'nv-gh', onclick: () => { closeDrawer(); go(tm.n); } }, h('span', { class: 'nv-num' }, tm.n), h('span', { class: 'nv-gt' }, tm.title)));
@@ -413,6 +413,9 @@ const UI = (function () {
       const nx = cur === 'dark' ? 'light' : 'dark';
       document.documentElement.setAttribute('data-theme', nx); store.set('theme', nx);
     });
+    const pp = document.getElementById('profPi');
+    pp.checked = !!store.get('profPi'); T.setProfPi(pp.checked);
+    pp.addEventListener('change', () => { T.setProfPi(pp.checked); store.set('profPi', pp.checked); if (curTool && state.tema === curTool.tema && state.lastRes[curTool.id]) solveCurrent(); });
     document.getElementById('menuBtn').addEventListener('click', () => document.body.classList.toggle('drawer'));
     document.getElementById('scrim').addEventListener('click', closeDrawer);
     document.getElementById('q').addEventListener('input', renderNav);

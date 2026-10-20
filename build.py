@@ -4,7 +4,7 @@ import pathlib
 
 root = pathlib.Path(__file__).parent
 src = root / 'src'
-order = ['engine.js', 'ui.js', 'pickers.js', 'tools.js', 'home.js']
+order = ['engine.js', 'ui.js', 'pickers.js', 'tools.js', 't8.js', 'home.js']
 js = '\n'.join((src / f).read_text(encoding='utf-8') for f in order)
 js = js.replace('if (typeof module !== \'undefined\') module.exports = TNV;', '')
 css = (src / 'style.css').read_text(encoding='utf-8')

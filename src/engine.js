@@ -276,13 +276,17 @@ const TNV = (function () {
   }
 
   /* ───────── Familias continuas (temario T1) ───────── */
+  // El profesor usa 2π ≈ 6,28 en sus macros (φ(x) ≈ e^(−x²/2)/√6,28). Activable para reproducir sus cifras.
+  let PROF_PI = false;
+  function setProfPi(b) { PROF_PI = !!b; }
+  const kPi = () => PROF_PI ? Math.sqrt(2 * Math.PI / 6.28) : 1;
   function normal(m, s) {
     return makeCont({
       fam: 'normal', name: `N(${m}; ${s})`, m, s, mean: m, var: s * s,
       cdf: x => Phi((x - m) / s), sf: x => Phi(-(x - m) / s), pdf: x => phi((x - m) / s) / s,
       qp: p => m + s * PhiInv(p), qs: q => m - s * PhiInv(q),
-      SL: x => { const k = (x - m) / s; return s * phi(k) + (m - x) * Phi(-k); },
-      CVaRz: z => m + s * Math.exp(-0.5 * z * z - logPhi(z)) / SQ2PI,
+      SL: x => { const k = (x - m) / s; return s * phi(k) * kPi() + (m - x) * Phi(-k); },
+      CVaRz: z => m + s * kPi() * Math.exp(-0.5 * z * z - logPhi(z)) / SQ2PI,
       wang: a => m + a * s,
       entropicClosed: mu => m + mu * s * s / 2,
       sample: r => m + s * r.norm()
@@ -846,7 +850,7 @@ const TNV = (function () {
   return {
     phi, Phi, PhiInv, logPhi, lgamma, gammaFn, gammaP, gammaQ, betaI, bisect, solveIncreasing, glNodes,
     makeDisc, makeCont, normal, lognormal, lognormalMoments, gammaD, wald, betaD, uniform, gumbel, frechet, weibull, pareto, gpd, student, constant, discreteTable,
-    poisson, negbin, binomial, freqTable, rng,
+    poisson, negbin, binomial, freqTable, rng, setProfPi, profPi: () => PROF_PI,
     risk, riskName, rhoStd, expectile, spectral, wangG, comonotoneAdditive, translationInvariant,
     plEval, plSlopes, plComplement, transformDist, layerRisk,
     paymentMoments, compound, fft,

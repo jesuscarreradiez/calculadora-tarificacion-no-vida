@@ -25,8 +25,15 @@ Junio 2023–2026, Enero 2014–2020, 2022–2026 (16 convocatorias; 2014–2016
 - Panjer explícito con severidad discreta (2014 Ej. 3), reaseguro por tramos con y normal y VaR70 de la reaseguradora + IP(pérdida de la reaseguradora) (2014/2015 Ej. 5), CVaR(μ) y sensibilidad (2014 Ej. 2a), IP(ganar ≥ ½Π | N ≤ 1) (2016 Ej. 3d).
 - El usuario usará la app en ordenador.
 
+## Macros y ejercicios resueltos del profesor (contexto, no son de examen)
+- **El profesor usa 2π ≈ 6,28** en φ (macro B «Cálculo de riesgos», C «Stop-loss cedido»): CVaR90 N(0,1) = 1,755428339, CVaR95 = 2,06323586, 𝔼((y−U)⁺) con s/√6,28. La app tiene el interruptor «Usar 2π ≈ 6,28» en la barra lateral.
+- Macro A (distribución compuesta): Monte Carlo; BN parametrizada por media y desviación; log-normal por media y desviación; Erlang por media y varianza; VaR = percentil de la muestra ordenada, CVaR = media de la cola con interpolación.
+- Muchas cifras oficiales usan ρ(0,1) simulado (SW₁ ≈ 1,603621301; SDPT₁ ≈ 0,906229677; CVaR95 ≈ 2,064381357 en 2019). El tema 8 admite «ρ(0,1) a usar» para reproducirlas exactamente.
+- Tema 8 (resueltos I, ej. 1–4): k₂ = 1 − R₀/ρ − (𝔼/ρ)(1+k₁); por póliza k₂ × ρ(−y)/Σρᵢ; con reaseguro se suma (Π_R − ρ(−y_c))/ρ(−y); inversión: B = A⁻¹𝔼(r−r₀)/ρ(0,1), M = 1/√(1−BᵗAB), x = Mσ(y)B/Π, Π* = Π + ρ(R)/(1+r₀). Verificado: Enero 2020 Ej. 2d se reproduce al céntimo con su ρ(0,1).
+- Ejercicios propuestos: mismos tipos que los exámenes + algunos teóricos (landa-cuantiles, cotas con expectiles, PELVE log-normal, regresiones).
+
 ## Prioridades pendientes (por frecuencia en exámenes)
-1. **Tema 8 – recargos de cartera y por póliza** (aparece en casi todos los Ej. 2): k₂ = 1 − R₀/ρ − 𝔼(1+k₁)/ρ, coeficiente reductor por póliza (p. ej. 0,064890305), recargos máx./mín. por póliza.
+1. ~~Tema 8 – recargos~~ **hecho** (herramienta t8-recargos, src/t8.js).
 2. **Tema 10 – credibilidad**: gamma-Poisson conjugada, beta–IP(N=0), Bühlmann (h, h̃).
 3. Tema 8.4 – diversificación de primas en activos (cartera óptima con activo sin riesgo).
 4. Temas 11–12 – logit/cuantiles (requieren datos tabulados).
