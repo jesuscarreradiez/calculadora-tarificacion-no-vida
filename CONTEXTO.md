@@ -30,6 +30,10 @@ Junio 2023–2026, Enero 2014–2020, 2022–2026 (16 convocatorias; 2014–2016
 - Macro A (distribución compuesta): Monte Carlo; BN parametrizada por media y desviación; log-normal por media y desviación; Erlang por media y varianza; VaR = percentil de la muestra ordenada, CVaR = media de la cola con interpolación.
 - Muchas cifras oficiales usan ρ(0,1) simulado (SW₁ ≈ 1,603621301; SDPT₁ ≈ 0,906229677; CVaR95 ≈ 2,064381357 en 2019). El tema 8 admite «ρ(0,1) a usar» para reproducirlas exactamente.
 - Tema 8 (resueltos I, ej. 1–4): k₂ = 1 − R₀/ρ − (𝔼/ρ)(1+k₁); por póliza k₂ × ρ(−y)/Σρᵢ; con reaseguro se suma (Π_R − ρ(−y_c))/ρ(−y); inversión: B = A⁻¹𝔼(r−r₀)/ρ(0,1), M = 1/√(1−BᵗAB), x = Mσ(y)B/Π, Π* = Π + ρ(R)/(1+r₀). Verificado: Enero 2020 Ej. 2d se reproduce al céntimo con su ρ(0,1).
+- Macro I2_ExpectilN01: tabla simulada (100.000 sim.) de nivel CVaR → coeficiente μ → expectil de la N(0,1) con la ec. (48). Los exámenes interpolan ahí: μ = 0,300035142 → 0,337139093 (Enero 2025), μ = 0,299894279 → 0,337404647 (Junio 2026). Exacto: 𝔈₀,₃ = 0,3371198815.
+- Macro I «Cálculo del expectil»: expectil por simulación (algoritmo §4.5.2) de y o de un reaseguro Σaᵢ(y−Uᵢ)⁺; distribuciones normal, log-normal, Erlang, Weibull, Pareto.
+- Macro L «PELVE»: ν tal que CVaR₁₋μ = VaR₁₋ν para la normal (la app lo da en la calculadora de medidas).
+- Macros K1/K2: regresión de cuantiles y de expectiles por programación lineal (símplex) con frecuencias como pesos — temas 12–13. Datos y solución guardados en test/fixtures/macros_profesor.json (K1 al 70 %: betas 1; −0,5; 2,766; alfa ≈ 0).
 - Ejercicios propuestos: mismos tipos que los exámenes + algunos teóricos (landa-cuantiles, cotas con expectiles, PELVE log-normal, regresiones).
 
 ## Prioridades pendientes (por frecuencia en exámenes)
