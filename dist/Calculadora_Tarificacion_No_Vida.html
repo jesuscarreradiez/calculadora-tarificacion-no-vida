@@ -2680,8 +2680,8 @@ const P = (function () {
       if (!specs.length) throw new Error('Añade al menos una medida.');
       R.step('Distribución de y', src.ex);
       const vals = specs.map(sp => T.risk(D, sp));
-      const rows = specs.map((sp, i) => src.normal ? [String(i + 1), rn(sp), sp.type === 'Entropica' ? '—' : T.rhoStd(sp), vals[i]] : [String(i + 1), rn(sp), vals[i]]);
-      R.table('Resultados', src.normal ? ['#', 'Medida', 'ρ<sub>(0,1)</sub>', 'ρ(−y)'] : ['#', 'Medida', 'ρ(−y)'], rows, { top: true });
+      const rows = specs.map((sp, i) => src.normal ? [String(i + 1), rn(sp), sp.type === 'Entropica' ? '—' : T.rhoStd(sp), vals[i], sp.type === 'Entropica' ? '—' : T.fmtPctLevel(T.Phi(T.rhoStd(sp)))] : [String(i + 1), rn(sp), vals[i]]);
+      R.table('Resultados', src.normal ? ['#', 'Medida', 'ρ<sub>(0,1)</sub>', 'ρ(−y)', 'Nivel de VaR equivalente Φ(ρ<sub>(0,1)</sub>)'] : ['#', 'Medida', 'ρ(−y)'], rows, { top: true });
       specs.forEach((sp, i) => R.key('r' + (i + 1), vals[i]).key('s' + (i + 1), src.normal && sp.type !== 'Entropica' ? T.rhoStd(sp) : null));
       R.tile('𝔼(y)', D.mean).tile('σ(y)', D.sd);
       specs.slice(0, 4).forEach((sp, i) => R.tile(rn(sp), vals[i], { main: true }));
