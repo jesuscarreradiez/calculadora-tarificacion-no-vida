@@ -124,11 +124,29 @@
         if (c) R.key('k2gp', k2g * c);
       }
       // ── por póliza ──
-      const polTable = (title, k1max, k2max) => {
+      // Las cuatro combinaciones habituales de recargos (como en las hojas del profesor):
+      // (k₁ máx; 0), (−1; k₂), (0; k₂ máx) y (k₁ fijado; k₂). k₂ = (Π − (1 + k₁)𝔼(y))/ρ(−y); por póliza × c.
+      const combos = Pp => {
+        const k2of = k1 => (Pp - (1 + k1) * m) / rho;
+        const cs = [{ lab: 'Seguridad máx. (k₂ = 0)', k1: Pp / m - 1 }, { lab: 'k₁ = −1', k1: -1 }, { lab: 'Riesgo máx. (k₁ = 0)', k1: 0 }];
+        if (k1g !== null) cs.push({ lab: `k₁ = ${f(k1g)}`, k1: k1g });
+        cs.forEach(x => { x.k2 = k2of(x.k1); x.k2p = c ? x.k2 * c : null; });
+        cs[0].k2 = 0; if (c) cs[0].k2p = 0;
+        return cs;
+      };
+      const polTable = (title, Pp, tag) => {
+        const cs = combos(Pp);
+        R.table(`${title}: recargos de la cartera${c ? ' y de cada póliza' : ''}`, ['Combinación', 'k₁', 'k₂ cartera', ...(c ? ['k₂ por póliza = k₂·' + f(c, 6)] : []), 'Prima cartera (1 + k₁)𝔼 + k₂ρ'],
+          cs.map(x => [x.lab, x.k1, x.k2, ...(c ? [x.k2p] : []), (1 + x.k1) * m + x.k2 * rho]));
         if (!rows || !c) return;
-        const k2p = k2max * c;
-        R.table(title, ['Pólizas', 'Coste esperado', 'Riesgo ρ(−yᵢ)', `Prima con k₁ = ${f(k1max, 6)}, k₂ = 0`, `Prima con k₁ = 0, k₂ = ${f(k2p, 6)}`, 'Prima proporcional al riesgo (86)'],
-          rows.map(r => [f(r.n), r.E, r.r, (1 + k1max) * r.E, r.E + k2p * r.r, (m * (1 + k1max)) * r.r / sumR]));
+        const pr = (x, r) => (1 + x.k1) * r.E + x.k2p * r.r;
+        R.table(`${title}: prima de cada póliza`, ['Pólizas nᵢ', '𝔼(yᵢ)', 'ρ(−yᵢ)', ...cs.map(x => `(${f(x.k1, 6)}; ${f(x.k2p, 6)})`), 'Proporcional al riesgo (86)'],
+          [...rows.map(r => [f(r.n), r.E, r.r, ...cs.map(x => pr(x, r)), Pp * r.r / sumR]),
+            ['<b>Σ nᵢ·Πᵢ</b>', '', '', ...cs.map(x => rows.reduce((a, r) => a + r.n * pr(x, r), 0)), Pp]]);
+        cs.forEach((x, k) => rows.forEach((r, i) => R.key(`${tag}c${k + 1}_${i + 1}`, pr(x, r))));
+        R.ans(`${title}: primas por póliza.`, `Con k₂ por póliza = k₂ de la cartera × ${f(c)}, la prima de cada tipo es Πᵢ = (1 + k₁)𝔼(yᵢ) + k₂ρ(−yᵢ):` +
+          eq(cs.map(x => `${x.lab}: (k₁; k₂) = (${f(x.k1)}; ${f(x.k2p)}) ⇒ ${rows.map((r, i) => `Π${i + 1} = ${f(pr(x, r))}`).join(', ')}; Σ nᵢΠᵢ = ${f(rows.reduce((a, r) => a + r.n * pr(x, r), 0))}`).join('<br>')) +
+          `En todos los casos la suma de las primas de las pólizas reproduce la prima de la cartera, ${vv(Pp)}.`);
       };
       if (c) {
         const k2p = e0.k2 * c;
@@ -139,9 +157,9 @@
           eq(`Pólizas: (k₁; k₂) = (${vv(e0.k1)}; 0) y (0; ${f(e0.k2)} × ${f(c)}) = (0; ${vv(k2p)}); ratio de sustitución por póliza ${f(ratio)} × ${f(c)} = ${f(ratio * c)}`));
         R.uses('k88');
         R.ans('Recargos y primas de cada póliza.', `El recargo de seguridad máximo de cada póliza sigue siendo ${vv(e0.k1)}, y el recargo por riesgo máximo se obtiene multiplicando ${f(e0.k2)} por ${f(rho)}/${f(sumR)} = ${f(c)}, es decir, k₂ = ${vv(k2p)}. ${rows ? 'Las primas de cada tipo de póliza son: ' + rows.map((r, i) => `tipo ${i + 1}: ${f((1 + e0.k1) * r.E)} (con k₁) y ${f(r.E + k2p * r.r)} (con k₂)`).join('; ') + '.' : ''}`);
-        polTable('Primas por póliza sin reaseguro', e0.k1, e0.k2);
         if (rows) rows.forEach((r, i) => R.key('pk1_' + (i + 1), (1 + e0.k1) * r.E).key('pk2_' + (i + 1), r.E + k2p * r.r));
       } else R.note('Para repartir los recargos entre las pólizas hace falta el riesgo ρ(−yᵢ) de cada una (columna «Riesgo»).');
+      polTable('Sin reaseguro', P0, '');
 
       // ── reaseguro ──
       if (V.b('reOn')) {
@@ -164,7 +182,8 @@
         R.uses('rea58', 'k78');
         R.ans('Con reaseguro.', `El riesgo cedido es y<sub>c</sub> = ${T.treatyToString(yc)}, con 𝔼(y<sub>c</sub>) = ${f(Eyc)} y ${rn(sp, '−y<sub>c</sub>')} = ${f(rhoc)}. El precio del reaseguro será ${f(1 + k1r)} × ${f(Eyc)} + ${f(k2r)} × ${f(rhoc)} = ${vv(PR)}. Por consiguiente, las relaciones entre los recargos son las anteriores ${shift < 0 ? 'menos' : 'más'} (${f(PR)} − ${f(rhoc)})/${f(rho)} = ${f(Math.abs(shift))}, es decir,` + eq(relTxt(shift)) +
           `Se obtiene (k₁; k₂) = (${vv(e1.k1)}; 0) y (0; ${vv(e1.k2)}). La prima de la cartera será ${f(rho)} ${PR - rhoc < 0 ? '−' : '+'} ${f(Math.abs(PR - rhoc))} = ${vv(Pt)}${c ? `, y para cada póliza k₂ se multiplica por ${f(c)}: k₂ = ${vv(e1.k2 * c)}` : ''}. ${conv ? 'El reaseguro abarata la prima, así que conviene a la cedente.' : 'El reaseguro encarece la prima.'}`);
-        if (c) { R.key('k2Rep', e1.k2 * c); polTable('Primas por póliza con reaseguro', e1.k1, e1.k2); }
+        if (c) R.key('k2Rep', e1.k2 * c);
+        polTable('Con reaseguro', Pt, 're');
         const plr = C.sf(PR); R.key('plr', plr);
         R.step('Probabilidad de pérdidas para la reaseguradora', eq(`IP(y<sub>c</sub> > Π<sub>R</sub>) = ${vv(plr)}`));
         R.ans('Pérdidas de la reaseguradora.', `La reaseguradora pierde dinero si y<sub>c</sub> > ${f(PR)}, lo que ocurre con probabilidad ${vv(plr)}.`);
@@ -214,6 +233,12 @@
       return R;
     },
     examples: [
+      { id: 'oct6-cp', label: 'Clase 6 oct. 2026 · cartera 1.000/5.000/10.000, CVaR 95 %, cuota-parte con retención del 60 % (PPVE 1 %)', values: { src: 'tabla', cart: [{ n: '1000', E: '5', s: '10', r: '100' }, { n: '5000', E: '8', s: '12', r: '200' }, { n: '10000', E: '12', s: '25', r: '280' }], m_rho: 'CVaR', m_lvl: '95', R0: '0', r01o: '', k1: '0,005', reOn: true, re: '0,4y', reT: 'c', k1r: '0,01', k2r: '0', invOn: false },
+        expect: [{ k: 'rho', l: 'CVaR<sub>95%</sub>(−y) = prima', v: 170484.6444, src: 'hoja Octubre_6' }, { k: 'k1max', l: 'k₁ máx.', v: 0.033240269 }, { k: 'k2max', l: 'k₂ máx.', v: 0.0321708995 }, { k: 'k2g', l: 'k₂ con k₁ = 0,005', v: 0.027331754 }, { k: 'c', l: 'Coeficiente reductor ρ/Σρᵢ', v: 0.0437140114 }, { k: 'PR', l: 'Coste del reaseguro 1,01·0,4·𝔼(y)', v: 66660 }, { k: 'primaRe', l: 'Nueva prima', v: 168950.7866 }, { k: 'k1Re', l: 'k₁ máx. con reaseguro', v: 0.0239441613 }, { k: 'k2Re', l: 'k₂ máx. con reaseguro', v: 0.0231738561 }],
+        note: 'Hoja de clase (no es de examen). Reproduce las cuatro combinaciones del profesor: (k₁ máx; 0), (−1; k₂), (0; k₂ máx) y (0,005; k₂), con las primas de cada póliza y su suma.' },
+      { id: 'oct6-sl', label: 'Clase 6 oct. 2026 · misma cartera con stop-loss de deducible 165.000 (PPVE 1 %)', values: { src: 'tabla', cart: [{ n: '1000', E: '5', s: '10', r: '100' }, { n: '5000', E: '8', s: '12', r: '200' }, { n: '10000', E: '12', s: '25', r: '280' }], m_rho: 'CVaR', m_lvl: '95', R0: '0', r01o: '', k1: '0,005', reOn: true, re: '(y − 165.000)+', reT: 'c', k1r: '0,01', k2r: '0', invOn: false },
+        expect: [{ k: 'Eyc', l: '𝔼(y<sub>c</sub>)', v: 1055.634204, src: 'simulado (macro Riesgos_SL)' }, { k: 'rhoc', l: 'CVaR<sub>95%</sub>(−y<sub>c</sub>)', v: 5483.593023, src: 'simulado' }, { k: 'primaRe', l: 'Nueva prima', v: 166067.2419, src: 'con los valores simulados' }],
+        note: 'La hoja usa 𝔼(y<sub>c</sub>) y el CVaR cedido simulados con la macro «Riesgos_SL»; los valores exactos son 𝔼(y<sub>c</sub>) = s·φ(0) = 1.060,766 y CVaR = s·2,0627 = 5.484,644.' },
       { id: 'j25-2a', label: 'Junio 2025 · Ej. 2a · SW₁, cartera de 4 tipos', values: { r01o: '1,603621301' }, expect: [{ k: 'prima', l: 'Prima de la cartera', v: 607586.1392, src: 'SW₁(N(0,1)) simulada 1,6036' }, { k: 'pk1_1', l: 'Prima tipo I (k₁)', v: 121.5172278 }, { k: 'pk2_1', l: 'Prima tipo I (k₂)', v: 128.8177159 }, { k: 'pk1_3', l: 'Prima tipo III (k₁)', v: 182.2758418 }, { k: 'pk2_3', l: 'Prima tipo III (k₂)', v: 178.8177159 }] },
       {
         id: 'e19-2abc', label: 'Enero 2019 · Ej. 2 · CVaR 95 %, reaseguro 0,5(y − 1,6M)+, inversión', values: { cart: [{ n: '1000', E: '100', s: '1000', r: '1800' }, { n: '2500', E: '100', s: '950', r: '1600' }, { n: '4000', E: '150', s: '1800', r: '2800' }, { n: '3000', E: '200', s: '3000', r: '4500' }], m_rho: 'CVaR', m_lvl: '95', r01o: '2,064381357', reOn: true, re: '0,5(y − 1.600.000)+', reT: 'c', k1r: '0', k2r: '0,04', invOn: true, r0: '0', act: [{ mu: '4%', sd: '10%' }, { mu: '5%', sd: '12%' }], corr: '1-2: 0,5' },

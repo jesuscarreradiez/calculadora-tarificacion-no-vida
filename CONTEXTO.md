@@ -56,3 +56,9 @@ engine.js (numérica, distribuciones, medidas, FFT/Panjer, MC) · ui.js (formula
 - t5-reaseguro: precio por componentes y párrafo de aditividad (Enero 2014/2015 Ej. 5).
 - t3-mixtura: párrafo de simulación (Junio 2025 Ej. 4a).
 - Ejemplos nuevos o fusionados: E15-2 (Π₁ y Π₂), E14-3 (Panjer hasta 0,3 + PPVE), E23-3c (cartera de las 3 modalidades), posteriores E26/E25 con prima de referencia.
+
+## Parte 1 del temario (temas 1–8) y material de clase (6 oct. 2026)
+- Parte 1 = temas 1–8 (el 9, reaseguro óptimo, no entra). En los exámenes cubre **dos** preguntas prácticas: la de cartera/recargos/reaseguro/inversión (T4, T5, T8; Ej. 1 en 2026 y Junio 2025, Ej. 2 antes) y la de frecuencia × severidad (T1–T3, T7; Ej. 2 en 2026, Ej. 3 antes). Lo de credibilidad/bonus-malus (T10) y regresiones (T11–13) es la parte 2.
+- Hoja «Octubre_6.xlsm»: cartera 1.000/5.000/10.000 (𝔼 5/8/12, σ 10/12/25, riesgo 100/200/280), CVaR95 con π exacto, cuatro combinaciones de recargos (k₁ máx; 0), (−1; k₂), (0; k₂ máx), (0,005; k₂), primas por póliza con coeficiente reductor ρ/Σρᵢ y «Suma de primas»; cuota-parte con retención 0,6 y coste 1,01·0,4·𝔼; stop-loss con deducible 165.000 (𝔼 y CVaR cedidos simulados). Ejemplos oct6-cp y oct6-sl en t8-recargos (cuadran al céntimo salvo lo simulado).
+- Macro «Sub Riesgos_SL»: VaR, CVaR, Wang, SW, DPT, SDPT de (y − U)⁺ con y normal/uniforme/log-normal/Erlang dada por media y desviación (Erlang con α redondeado; la uniforme tiene errata a = 2𝔼 − σ√3). En la app: grupo «Stop-loss» de la calculadora de medidas (ejemplo oct6-sl), modos «media y desviación» de la uniforme y «Erlang (α redondeado)».
+- t8-recargos muestra ahora las tablas de las cuatro combinaciones (cartera y cada póliza, con Σ nᵢΠᵢ), sin reaseguro y con reaseguro.

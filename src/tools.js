@@ -810,6 +810,11 @@
     groups: [
       { title: 'Siniestralidad y', fields: P.srcFields('y_', ['cont', 'cartera', 'compuesta', 'discreta'], 'cont') },
       {
+        title: 'Stop-loss: riesgos de (y − U)⁺ (opcional)', optional: true, openIf: v => v.slU, fields: [
+          { id: 'slU', type: 'num', label: 'Deducible / prioridad U', def: '', ph: 'vacío = riesgos de y', help: 'Calcula las medidas del riesgo cedido (y − U)⁺, como la macro «Riesgos_SL». Con U = 0 se recupera y si y ≥ 0.', wide: true }
+        ]
+      },
+      {
         title: 'Medidas', fields: [
           { id: 'meds', type: 'rows', label: 'Una fila por medida. Parámetro: nivel en % (VaR, CVaR), a (Wang, SW, DPT…) o μ (expectil, entrópica)', cols: [{ id: 't', label: 'Medida', type: 'sel', opts: P.MEAS.map(m => [m[0], m[0] === 'SigmaE' ? 'ρσ' : m[0] === 'Entropica' ? 'Entrópica' : m[0] === 'SPow' ? 'g(t)=tᵃ' : m[0]]), def: 'CVaR', w: '46%' }, { id: 'p', label: 'Parámetro', type: 'text' }], def: [{ t: 'VaR', p: '95' }, { t: 'CVaR', p: '95' }, { t: 'SW', p: '1' }, { t: 'Expectil', p: '0,3' }] }
         ]
@@ -824,7 +829,16 @@
     ],
     solve(V, { result }) {
       const R = result();
-      const src = P.buildSrc(V, 'y_'), D = src.D;
+      let src = P.buildSrc(V, 'y_'), D = src.D;
+      const slU = V.nOpt('slU');
+      if (slU !== null) {
+        const y0 = src;
+        D = T.transformDist(y0.D, { a0: 0, layers: [{ a: 1, U: slU }] });
+        src = { D, normal: false, kind: 'stoploss', y0, U: slU, m: D.mean, s: D.sd,
+          ex: `${y0.ex}<br>Se pide el riesgo del stop-loss z = (y − ${f(slU)})<sup>+</sup> (lo que paga la reaseguradora con deducible ${f(slU)}):` +
+            eq(P.slFormula(y0, slU)) + eq(`IP(z = 0) = IP(y ≤ ${f(slU)}) = ${vv(y0.D.cdf(slU))}; &nbsp; σ(z) = ${vv(D.sd)}`) +
+            `z es función no decreciente de y, luego VaR<sub>1−t</sub>(−z) = (VaR<sub>1−t</sub>(−y) − U)<sup>+</sup> para todo t: las medidas de distorsión y espectrales se obtienen integrando esos VaR con su función de pesos.` };
+      }
       const specs = (V.raw.meds || []).map((r, i) => {
         if (r.t === 'WCVaR') { // «80:0,5; 90:0,5»
           const pr = String(r.p || '').split(/[;|]+/).map(x => x.trim()).filter(Boolean).map(x => x.split(':').map(T.parseNum));
@@ -855,7 +869,7 @@
           cvAns = () => R.ans('CVaR en función de μ.', `Para la normal, CVaR<sub>1−μ</sub>(−y) = ${f(src.m)} + ${f(src.s)}·φ(Φ<sup>−1</sup>(μ))/μ, con derivada −s(μΦ<sup>−1</sup>(μ) + φ(Φ<sup>−1</sup>(μ)))/μ², negativa: ${cv.map(sp => `en μ = ${f(sp.mu)} vale ${vv(sens(sp.mu))}`).join('; ')}.`);
         }
         if (cv.length) R.table('PELVE: CVaR<sub>1−μ</sub> = VaR<sub>1−ν</sub> en el mundo normal (§4.3.1)', ['CVaR', 'ν = Φ(−φ(Φ<sup>−1</sup>(μ))/μ)', 'Nivel equivalente del VaR'], cv.map(sp => { const nu = T.Phi(-T.phi(T.PhiInv(sp.mu)) / sp.mu); return [rn(sp), nu, T.fmtPctLevel(1 - nu)]; }));
-      } else specs.forEach((sp, i) => R.step(rn(sp), eq(P.genExplain(sp, D, vals[i], src.kind))));
+      } else specs.forEach((sp, i) => R.step(rn(sp), eq(src.y0 && src.y0.normal && sp.type === 'CVaR' ? P.layerFormula(src.y0, sp, src.U, vals[i]) : P.genExplain(sp, D, vals[i], src.kind))));
       const ex = specs.find(sp => sp.type === 'Expectil'), cvs = specs.filter(sp => sp.type === 'CVaR');
       if (ex && cvs.length && ex.mu < 0.5) {
         const z = T.risk(D, ex);
@@ -863,9 +877,10 @@
       }
       if (V.s('y_src') === 'cartera') R.uses('tcl61'); else if (V.s('y_src') === 'compuesta') R.uses('comp26');
       if (src.normal) R.uses('norm44');
+      if (src.y0) R.uses(src.y0.normal ? 'slN' : null);
       if (src.normal) R.ans('', `${src.ex.replace(/<div class="eq">/g, '<div class="eq">')} Las medidas invariantes por traslaciones y homogéneas cumplen ρ(−y) = m + ρ<sub>(0,1)</sub>·s (ec. 44), donde ρ<sub>(0,1)</sub> es el riesgo de la normal estándar:`);
       else R.ans('', src.ex);
-      specs.forEach((sp, i) => R.uses(src.normal && sp.type !== 'Entropica' ? 'norm45' : null, MK(sp.type)) && R.ans('', src.normal && sp.type !== 'Entropica' ? `${P.std01Explain(sp)}${src.m !== 0 || src.s !== 1 ? `, de donde ${rn(sp)} = ${f(src.m)} + ${f(T.rhoStd(sp))} × ${f(src.s)} = ${vv(vals[i])}` : ''}.` : `${P.genExplain(sp, D, vals[i], src.kind)}.`));
+      specs.forEach((sp, i) => R.uses(src.normal && sp.type !== 'Entropica' ? 'norm45' : null, MK(sp.type), src.y0 && src.y0.normal && sp.type === 'CVaR' ? 'cvarslN' : null) && R.ans('', src.normal && sp.type !== 'Entropica' ? `${P.std01Explain(sp)}${src.m !== 0 || src.s !== 1 ? `, de donde ${rn(sp)} = ${f(src.m)} + ${f(T.rhoStd(sp))} × ${f(src.s)} = ${vv(vals[i])}` : ''}.` : `${src.y0 && src.y0.normal && sp.type === 'CVaR' ? P.layerFormula(src.y0, sp, src.U, vals[i]) : P.genExplain(sp, D, vals[i], src.kind)}.`));
       if (cvAns) cvAns();
       if (V.b('pr')) {
         const A = V.n('A'), B = V.n('B'), k = Math.round(V.n('prow'));
@@ -897,6 +912,9 @@
       { id: 'j24-1', label: 'Junio 2024 · Ej. 1-2 · ρ = 2∫μ CVaR dμ y SW₁ de la N(0,1)', values: { y_src: 'cont', y_c_fam: 'normal', y_c_normal_p_m: '0', y_c_normal_p_s: '1', meds: [{ t: 'SPow', p: '2' }, { t: 'SW', p: '1' }] } },
       { id: 'e23-3c', label: 'Enero 2023 · Ej. 3c · cartera de 1.000 pólizas de cada modalidad (sin franquicia, franquicia 40, máximo 120)', values: { y_src: 'cartera', y_cart: [{ n: '1000', E: '100', s: '173,2050808' }, { n: '1000', E: '67,03200460', s: '133,7897252' }, { n: '1000', E: '69,88057881', s: '107,8459548' }], meds: [{ t: 'CVaR', p: '90' }], pr: true, A: '1', B: '0,02', prow: '1' },
         note: '𝔼 y σ de cada modalidad salen del «Coste agregado» (ejemplos Enero 2023 Ej. 3 i–iii): (i) 𝔼 = 100, σ = √30.000; (ii) franquicia 40: 𝔼 = 100e<sup>−0,4</sup>; (iii) máximo 120: 𝔼 = 100(1 − e<sup>−1,2</sup>). Por el TCL, la cartera es aproximadamente normal.' },
+      { id: 'oct6-sl', label: 'Clase 6 oct. 2026 · riesgos del stop-loss (y − 165.000)⁺ de la cartera (macro Riesgos_SL)', values: { y_src: 'cartera', y_cart: [{ n: '1000', E: '5', s: '10' }, { n: '5000', E: '8', s: '12' }, { n: '10000', E: '12', s: '25' }], slU: '165.000', meds: [{ t: 'VaR', p: '95' }, { t: 'CVaR', p: '95' }, { t: 'Wang', p: '1' }, { t: 'SW', p: '1' }, { t: 'DPT', p: '2' }, { t: 'SDPT', p: '2' }] },
+        expect: [{ k: 'r2', l: 'CVaR<sub>95%</sub>(−(y − U)<sup>+</sup>)', v: 5483.593023, src: 'Monte Carlo, 30.000 sim.' }],
+        note: 'La macro «Sub Riesgos_SL» simula y (normal, uniforme, log-normal o Erlang por media y desviación), calcula (y − U)<sup>+</sup> y estima VaR, CVaR, Wang, SW, DPT y SDPT con 1.000 puntos. Aquí el cálculo es exacto. Ojo: en la macro la uniforme usa a = 2𝔼 − σ√3, b = 2𝔼 + σ√3, que tiene media 2𝔼 (errata); lo correcto es a = 𝔼 − σ√3, b = 𝔼 + σ√3 (modo «media y desviación» de la uniforme).' },
       { id: 'e24-cart', label: 'Enero 2024 · Ej. 2a · SDPT₁ de la cartera (2.000/5.000/3.000 pólizas)', values: { y_src: 'cartera', y_cart: [{ n: '2.000', E: '150', s: '1.000' }, { n: '5.000', E: '250', s: '2.000' }, { n: '3.000', E: '300', s: '3.000' }], meds: [{ t: 'SDPT', p: '1' }] }, expect: [{ k: 'r1', l: 'SDPT<sub>1</sub>(−y)', v: 2650602.49, src: 'con la SDPT₁ simulada' }] }
     ]
   });
