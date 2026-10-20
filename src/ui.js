@@ -338,9 +338,13 @@ const UI = (function () {
     NAV.append(navItem('Inicio', { ico: '⌂', on: state.tema === 0, go: () => go(0) }));
     const nEx = TOOLS.reduce((a, t) => a + (t.examples || []).length, 0);
     NAV.append(navItem('Ejercicios de examen', { ico: '📄', on: state.tema === 'ex', badge: String(nEx), go: () => go('ex') }));
+    if (VIEWS.guides) {
+      NAV.append(h('div', { class: 'nv-sec' }, 'Por ejercicio de examen'));
+      for (const g of VIEWS.guides) NAV.append(navItem(g.nav, { ico: g.ico, on: state.tema === g.id, go: () => go(g.id) }));
+    }
     NAV.append(h('div', { class: 'nv-sec' }, 'Temario'));
     for (const tm of [...TEMAS].sort((a, b) => a.n - b.n)) {
-      if (tm.off) { NAV.append(h('div', { class: 'nv-grp off' }, h('span', { class: 'nv-num' }, tm.offLabel || ''), h('span', null, 'Próximamente'))); continue; }
+      if (tm.off) { NAV.append(h('div', { class: 'nv-grp off' }, h('span', { class: 'nv-num' }, tm.offLabel || ''), h('span', null, 'Próximamente (6 y 7 ya van dentro de 3 y 8)'))); continue; }
       const open = state.tema === tm.n;
       const grp = h('div', { class: 'nv-grp' + (open ? ' open' : ''), style: { '--tc': tm.color } },
         h('button', { type: 'button', class: 'nv-gh', onclick: () => { closeDrawer(); go(tm.n); } }, h('span', { class: 'nv-num' }, tm.n), h('span', { class: 'nv-gt' }, tm.title)));
@@ -357,6 +361,7 @@ const UI = (function () {
     store.set('nav', { tema: n, toolByTema: state.toolByTema });
     if (n === 0) { renderView('home'); setCrumb(['Inicio']); }
     else if (n === 'ex') { renderView('exams'); setCrumb(['Ejercicios de examen']); }
+    else if (typeof n === 'string' && VIEWS[n]) { renderView(n); setCrumb(['Por ejercicio de examen', VIEWS[n].title]); }
     else renderTema(n, exId);
     renderNav();
     window.scrollTo({ top: 0 });
@@ -469,7 +474,7 @@ const UI = (function () {
     document.getElementById('q').addEventListener('input', renderNav);
     document.addEventListener('keydown', e => { if (e.key === '/' && document.activeElement.tagName !== 'INPUT') { e.preventDefault(); document.body.classList.add('drawer'); document.getElementById('q').focus(); } });
     const t0 = nav ? nav.tema : 0;
-    go(t0 === 'ex' ? 'ex' : (t0 && temaOf(t0) && !temaOf(t0).off ? t0 : 0));
+    go(t0 === 'ex' || (typeof t0 === 'string' && VIEWS[t0]) ? t0 : (t0 && temaOf(t0) && !temaOf(t0).off ? t0 : 0));
   }
   return { tema, tool, start, go, h, eq, v, result, TOOLS, TEMAS, toolById };
 })();

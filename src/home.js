@@ -129,7 +129,7 @@ const VIEWS = (function () {
       h('div', { class: 'stats' },
         h('div', { class: 'stat' }, h('b', null, exams.length), h('span', null, 'exámenes analizados')),
         h('div', { class: 'stat' }, h('b', null, ready), h('span', null, 'apartados resolubles ya')),
-        h('div', { class: 'stat' }, h('b', null, '1–5 y 8'), h('span', null, 'temas cubiertos')),
+        h('div', { class: 'stat' }, h('b', null, '1–8'), h('span', null, 'temas cubiertos')),
         h('button', { class: 'stat link', type: 'button', onclick: () => go('ex') }, h('b', null, '→'), h('span', null, 'ver ejercicios de examen')))));
     box.append(h('div', { class: 'intents' }, INTENTS.map(it => h('button', { class: 'intent', type: 'button', style: { '--tc': `var(--t${it.tema})` }, onclick: () => go(it.tema, it.tool) },
       h('span', { class: 'intent-n' }, 'T' + it.tema), h('div', { class: 'q' }, it.q), h('div', { class: 'a' }, it.a)))));
@@ -141,7 +141,7 @@ const VIEWS = (function () {
   function examsView(h, go) {
     const box = h('div', { class: 'exams-v' });
     box.append(h('div', { class: 'page-h' }, h('div', { class: 'page-k' }, 'Índice'), h('h2', null, 'Ejercicios de examen'),
-      h('p', null, 'Cada convocatoria con sus ejercicios prácticos. Los de los temas 1–5 se abren ya cargados y resueltos; el resto se añadirá con los temas siguientes.')));
+      h('p', null, 'Cada convocatoria con sus ejercicios prácticos. Los de la parte 1 (temas 1–8) se abren ya cargados y resueltos; los de los temas 10–13 se añadirán más adelante.')));
     const list = h('div', { class: 'ex-grid' });
     const draw = () => {
       list.innerHTML = '';
@@ -164,6 +164,69 @@ const VIEWS = (function () {
     draw();
     return box;
   }
-  return { home, exams: examsView };
+
+  /* ───────── Guías por tipo de ejercicio de examen ───────── */
+  const GUIDES = [
+    {
+      id: 'gA', ico: '🅐', nav: 'Ejercicio de cartera: recargos y reaseguro', title: 'Ejercicio de cartera: recargos, reaseguro e inversión',
+      when: 'Ej. 1 en Enero y Junio 2026 · Ej. 2 en casi todos los anteriores (Ej. 3 en Enero 2015; en Junio 2025 son el Ej. 1 y el Ej. 2). Temas 4, 5, 6 y 8.',
+      intro: 'Empieza con una <b>tabla de pólizas</b> (nº, coste esperado, desviación y riesgo de cada tipo). Casi todo se resuelve en <b>una sola herramienta</b>, la del tema 8: metes la tabla una vez y vas activando el reaseguro y la inversión según los apartados.',
+      tools: ['t8-recargos', 't5-reaseguro', 't5-optimo', 't4-medidas', 't4-normal', 't4-param'],
+      steps: [
+        ['Distribución de la cartera, ρ(−y) y prima; recargos máximos y mínimos de seguridad y riesgo de la cartera y de cada póliza; primas de cada póliza; «con k₁ = …, ¿cuánto vale k₂?»', 't8-recargos', 'Tabla de pólizas (con la columna «Riesgo»), la medida (CVaR, SW, SDPT, expectil…), R₀ y, si lo dan, k₁. Si el examen da o simula ρ(0,1), escríbelo en «ρ(0,1) a usar».'],
+        ['«Vuelva a calcular los recargos si se compra el reaseguro y<sub>c</sub> = …»', 't8-recargos', 'En la misma pantalla: abre «Reaseguro», marca «Hay reaseguro», escribe el tratado tal cual (p. ej. 0,8y − 0,7(y − 2.450.000)+) y los recargos k₁ʳ, k₂ʳ de la reaseguradora.'],
+        ['Comonotonía, riesgo retenido, «demuestre que el precio es suma», comparar varios tratados, IP(pérdida de la reaseguradora)', 't5-reaseguro', 'La tabla de pólizas (sin la columna riesgo), la medida y uno o varios tratados (uno por fila) con k₁ʳ, k₂ʳ.'],
+        ['«Lo recaudado se diversifica entre un activo sin riesgo y…»: cartera de valores óptima, ρ(R), nueva prima y recargos', 't8-recargos', 'En la misma pantalla: abre «Inversión», marca la casilla, pon r₀, los activos (rentabilidad y desviación) y las correlaciones.'],
+        ['«Establezca un procedimiento para estimar el k óptimo» de un stop-loss (y − k)⁺', 't5-optimo', 'La tabla de pólizas, la medida y los recargos de la reaseguradora; opcionalmente el rango de k.'],
+        ['ρ(0,1) de la normal estándar, CVaR en función de μ y su sensibilidad, PELVE, riesgos (VaR, CVaR, Wang, SW, DPT…) de un stop-loss (y − U)⁺', 't4-medidas', 'Siniestralidad (tabla de pólizas o normal), las medidas una por fila y, si es un stop-loss, el deducible U.'],
+        ['«Bajo Π = … la prima es … y bajo Π̃ = … es …: determine m y s»', 't4-normal', 'Los dos principios de prima con sus valores; opcionalmente la prima que piden después.'],
+        ['«Determine μ (o a) para que el recargo máximo sea del 10 %»', 't4-param', 'm y s de la cartera, la medida cuyo parámetro se busca y el objetivo.']
+      ]
+    },
+    {
+      id: 'gB', ico: '🅑', nav: 'Ejercicio de frecuencia × severidad', title: 'Ejercicio de frecuencia × severidad (coste agregado)',
+      when: 'Ej. 2 en Enero y Junio 2026, Junio 2023 y Enero 2015 · Ej. 3 en la mayoría de los demás. Temas 1, 2, 3, 4 y 7.',
+      intro: 'Empieza con «la frecuencia es … y la severidad es …». Casi todos los apartados salen de <b>una sola herramienta</b>, «Coste agregado», rellenando los campos opcionales que correspondan a lo que preguntan.',
+      tools: ['t3-agregado', 't3-tipos', 't3-mixtura', 't1-dist', 't2-freq', 't1-suma'],
+      steps: [
+        ['Media y desviación del coste anual, VaR/CVaR, prima Π = a𝔼 + bρ, riesgo del asegurador, IP(pérdida), IP(y = 0)', 't3-agregado', 'Frecuencia (Poisson, BN por θ, por media y varianza o Poisson–Gamma, tabla…), severidad (exponencial, log-normal por media y desviación, suma de exponenciales…), medida y a, b.'],
+        ['Franquicia por siniestro, indemnización máxima por siniestro o anual', 't3-agregado', 'Grupo «Franquicia e indemnizaciones máximas»: d, L o F.'],
+        ['Segunda prima Π₂ y su IP(pérdida); k mínimo para IP(pérdida) ≤ ε; IP(ganar al menos ½ prima); condicionado a N = n o N ≤ n; tabla de Panjer hasta IP(y > U) ≤ …', 't3-agregado', 'Campos opcionales del grupo «Medida de riesgo y principio de prima»: a₂ y b₂, ε, fracción, n, umbral de Panjer.'],
+        ['Cartera de n pólizas: riesgo, IP(pérdida), nº mínimo de pólizas', 't3-agregado', 'Grupo «Cartera de n pólizas»: n y/o ε.'],
+        ['Prima a priori y a posteriori, % de reducción', 't3-agregado', 'Resuelve primero a priori; luego carga los parámetros a posteriori y pon la prima a priori en «Prima de referencia». (La distribución a posteriori, de momento, se calcula a mano: llegará con el tema 10.)'],
+        ['Tipos o grupos de asegurados con su cuadro de probabilidades: asegurado genérico, cuadro por grupo, Bayes tras observar siniestros', 't3-tipos', 'Valores de N, una fila por tipo (peso y probabilidades), la severidad constante si la hay y las observaciones.'],
+        ['«y|λ es … y λ sigue …»: 𝔼(y), σ²(y), índice de mixtura, cómo simular', 't3-mixtura', 'La condicionada y|Λ y la distribución de Λ; opcionalmente la σ(y) simulada del enunciado.'],
+        ['Parámetros de la severidad, percentiles, 𝔼((S − d)⁺); distribución de N; suma de exponenciales o de normales', 't1-dist', 'Distribución de la severidad (o usa «Distribución de la frecuencia» / «Sumas» en los temas 2 y 1).']
+      ]
+    }
+  ];
+  const guideView = g => (h, go) => {
+    const box = h('div', { class: 'guide-v' });
+    const T_ = id => UI.toolById(id);
+    box.append(h('div', { class: 'page-h' }, h('div', { class: 'page-k' }, 'Por ejercicio de examen'), h('h2', null, g.title),
+      h('p', { html: `<b>${g.when}</b>` }), h('p', { html: g.intro })));
+    box.append(h('h3', { class: 'gd-h' }, 'Qué herramienta usar en cada apartado'));
+    box.append(h('div', { class: 'gd-steps' }, g.steps.map(([q, id, how], i) => {
+      const t = T_(id);
+      return h('div', { class: 'gd-step', style: { '--tc': `var(--t${t.tema})` } },
+        h('div', { class: 'gd-n' }, i + 1),
+        h('div', { class: 'gd-b' }, h('div', { class: 'gd-q', html: 'Si te piden: ' + q }), h('div', { class: 'gd-how', html: '<b>Qué meter:</b> ' + how })),
+        h('button', { type: 'button', class: 'gd-go', onclick: () => go(t.tema, id) }, h('span', { class: 'pill', style: { '--tc': `var(--t${t.tema})` } }, 'T' + t.tema), ' ' + t.title + ' →'));
+    })));
+    box.append(h('h3', { class: 'gd-h' }, 'Exámenes con este ejercicio (se abren ya cargados)'));
+    const list = h('div', { class: 'ex-grid' });
+    for (const ex of exams) {
+      const rows = EXAMS.filter(r => r[0] === ex && r[4] && g.tools.includes(r[4]));
+      if (!rows.length) continue;
+      list.append(h('div', { class: 'ex-card' }, h('div', { class: 'ex-h' }, h('b', null, ex)),
+        rows.map(([, ej, d, tm, tool, exid]) => h('button', { class: 'ex-row', type: 'button', onclick: () => go(tm, tool, exid) },
+          h('span', { class: 'ex-ej' }, ej), h('span', { class: 'ex-d', html: d }), h('span', { class: 'pill t' + tm, style: { '--tc': `var(--t${tm})` } }, 'T' + tm), h('span', { class: 'ex-go' }, 'Abrir →')))));
+    }
+    box.append(list);
+    return box;
+  };
+  const views = { home, exams: examsView, guides: GUIDES };
+  for (const g of GUIDES) { views[g.id] = guideView(g); views[g.id].title = g.title; }
+  return views;
 })();
 UI.start(VIEWS);

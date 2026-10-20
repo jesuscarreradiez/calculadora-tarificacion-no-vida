@@ -75,7 +75,7 @@
       ['Prima de la cartera (71)', 'Π = ρ(−y) − R₀; con reaseguro: ρ(−y) − R₀ + (Π<sub>r</sub> − ρ(−y<sub>c</sub>))']
     ]
   });
-  UI.tema({ n: 99, short: 'Próximamente', offLabel: '6–7, 9–13', title: '', color: 'var(--faint)', off: true });
+  UI.tema({ n: 99, short: 'Próximamente', offLabel: '10–13', title: '', color: 'var(--faint)', off: true });
 
   /* ═════════ Utilidades comunes ═════════ */
   const level = sp => T.fmtPctLevel(1 - sp.mu);

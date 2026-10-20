@@ -273,3 +273,12 @@ button.ex-row:hover{background:var(--accent-ll)}
   .app{display:block}
   .work{display:block}
 }
+.gd-h{font-family:var(--sans);font-size:15px;margin:18px 0 8px;color:var(--text)}
+.gd-steps{display:flex;flex-direction:column;gap:8px}
+.gd-step{display:grid;grid-template-columns:30px minmax(0,1fr) 260px;gap:12px;align-items:center;background:var(--surface);border:1px solid var(--border);border-left:4px solid var(--tc);border-radius:10px;padding:10px 12px}
+.gd-n{width:26px;height:26px;border-radius:50%;background:var(--tc);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px}
+.gd-q{font-size:14.5px;color:var(--text)}
+.gd-how{font-size:13px;color:var(--muted);margin-top:3px}
+.gd-go{border:1px solid var(--border-s);background:var(--accent-ll);color:var(--text);border-radius:8px;padding:8px 10px;font-size:13px;cursor:pointer;text-align:left}
+.gd-go:hover{border-color:var(--accent-2)}
+@media (max-width:900px){.gd-step{grid-template-columns:30px minmax(0,1fr)}.gd-go{grid-column:2}}
