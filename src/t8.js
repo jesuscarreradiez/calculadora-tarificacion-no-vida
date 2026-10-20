@@ -97,10 +97,12 @@
       const ratio = m / rho;
       const ext = (Pp) => ({ k1: (Pp - m) / m, k2: (Pp - m) / rho, k2m1: Pp / rho });
       const e0 = ext(P0 + 0); // con R0 la prima es ρ − R0
-      const c = sumR ? rho / sumR : null;
+      let c = sumR ? rho / sumR : null;
+      if (c && c > 1) { R.warn(`Σ nᵢρ(−yᵢ) = ${f(sumR)} es menor que ρ(−y) = ${f(rho)}: con estos datos el riesgo no es subaditivo, así que no se reparte k₂ entre las pólizas (la macro del profesor muestra «Riesgo no subaditivo»).`); c = null; }
       const lvl = RN => RN;
       R.tile('Prima de la cartera Π', P0, { main: true }).tile(rn(sp), rho).tile('Recargo de seguridad máx. (k₂ = 0)', e0.k1, { main: true }).tile('Recargo por riesgo máx. (k₁ = 0)', e0.k2, { main: true }).tile('Ratio de sustitución 𝔼(y)/ρ(−y)', ratio);
       if (c) R.tile('Factor por póliza ρ(−y)/Σρ(−yᵢ)', c);
+      if (e0.k1 < 0 || e0.k2 < 0) R.warn('Algún recargo extremo sale negativo (la prima no supera la siniestralidad esperada); las macros del profesor lo toman como 0.');
       R.key('rho', rho).key('prima', P0).key('k1max', e0.k1).key('k2max', e0.k2).key('k2m1', e0.k2m1).key('ratio', ratio).key('c', c).key('m', m).key('s', s);
       if (T.profPi()) R.note('Modo «2π ≈ 6,28» activado: se reproduce la aproximación de las macros del profesor.');
       // Paso 1–3

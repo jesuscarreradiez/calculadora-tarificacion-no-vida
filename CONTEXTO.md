@@ -34,6 +34,9 @@ Junio 2023–2026, Enero 2014–2020, 2022–2026 (16 convocatorias; 2014–2016
 - Macro I «Cálculo del expectil»: expectil por simulación (algoritmo §4.5.2) de y o de un reaseguro Σaᵢ(y−Uᵢ)⁺; distribuciones normal, log-normal, Erlang, Weibull, Pareto.
 - Macro L «PELVE»: ν tal que CVaR₁₋μ = VaR₁₋ν para la normal (la app lo da en la calculadora de medidas).
 - Macros K1/K2: regresión de cuantiles y de expectiles por programación lineal (símplex) con frecuencias como pesos — temas 12–13. Datos y solución guardados en test/fixtures/macros_profesor.json (K1 al 70 %: betas 1; −0,5; 2,766; alfa ≈ 0).
+- Macros D, E, F (riesgo individual, reaseguro, cartera de valores): mismo cálculo que la herramienta del tema 8. k₁ = (ρ − R₀)/𝔼 − 1, k₂ = 1 − R₀/ρ − 𝔼/ρ (negativos → 0); por póliza β = ρ/Σρᵢ sólo si Σρᵢ ≥ ρ («Riesgo no subaditivo»); reparto proporcional al riesgo; con reaseguro se suma (𝔼(y_c)(1+k₁ʳ) − (1−k₂ʳ)ρ(−y_c))/ρ(−y); 𝔼((y−U)⁺) con √6,28; el riesgo cedido de un stop-loss lo pide por teclado (lo simulaba aparte).
+- Macro G (Panjer): discretiza la severidad en unidades de 1 con IP(i−0,5 < S ≤ i+0,5), frecuencia Poisson/BN(por media y desviación)/normal, recursión de Panjer hasta masa 0,9999; VaR/CVaR y principios de prima.
+- Macro H (inferencia bayesiana, tema 10): Gamma–Poisson (𝔼 post = (α + Σnᵢ)/(1/β + h), peso de la información a priori), Beta–Binomial y caso discreto (Bayes sobre una tabla de tipos k con IP(N|k)). Base para implementar el tema 10.
 - Ejercicios propuestos: mismos tipos que los exámenes + algunos teóricos (landa-cuantiles, cotas con expectiles, PELVE log-normal, regresiones).
 
 ## Prioridades pendientes (por frecuencia en exámenes)
