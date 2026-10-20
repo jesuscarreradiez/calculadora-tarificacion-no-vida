@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none';">
+<title>Tarificación no Vida — Calculadora</title>
+<!--
+  Calculadora de examen · Tarificación no Vida
+  Archivo único, sin dependencias externas: funciona sin internet.
+  Generado por build.py a partir de src/.
+-->
+<style>
+/*__CSS__*/
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side" id="side">
+    <div class="brand">
+      <div class="logo">ρ</div>
+      <div class="brand-t"><b>Tarificación no Vida</b><span>Calculadora de examen</span></div>
+    </div>
+    <div class="search"><input id="q" type="search" placeholder="Buscar: reaseguro, 2019, CVaR…" autocomplete="off"></div>
+    <nav id="nav" class="nav"></nav>
+    <div class="side-foot">
+      <span class="badge-off" title="No necesita conexión">● Sin conexión</span>
+      <button class="theme-btn" id="themeBtn" type="button" title="Cambiar tema claro/oscuro">◐ Tema</button>
+    </div>
+  </aside>
+  <div class="scrim" id="scrim"></div>
+  <div class="main">
+    <header class="bar">
+      <button class="menu" id="menuBtn" type="button" aria-label="Menú">☰</button>
+      <div class="crumb" id="crumb"></div>
+    </header>
+    <main class="wrap" id="app"></main>
+  </div>
+</div>
+<noscript><p style="padding:20px">Activa JavaScript para usar la calculadora.</p></noscript>
+<script>
+/*__JS__*/
+</script>
+</body>
+</html>

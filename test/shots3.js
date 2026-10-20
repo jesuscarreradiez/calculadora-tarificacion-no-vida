@@ -1,0 +1,17 @@
+const { chromium } = require('playwright');
+const out = '/tmp/claude-0/-home-user/9451f465-8866-565a-82e6-9cb62b052902/scratchpad/';
+(async () => { const b = await chromium.launch();
+ const p = await b.newPage({ viewport: { width: 1440, height: 900 } });
+ await p.goto('file:///home/user/tnv/dist/Calculadora_Tarificacion_No_Vida.html'); await p.waitForTimeout(300);
+ await p.evaluate(() => UI.go(0)); await p.waitForTimeout(200); await p.screenshot({ path: out + 'n_home.png' });
+ await p.evaluate(() => UI.go('ex')); await p.waitForTimeout(200); await p.screenshot({ path: out + 'n_exams.png' });
+ await p.evaluate(() => UI.go(5, 't5-reaseguro', 'e20-2bc'));
+ await p.waitForFunction(() => document.querySelector('.caja-examen'), null, { timeout: 60000 }); await p.waitForTimeout(200);
+ await p.screenshot({ path: out + 'n_tema.png' });
+ await p.fill('#q', '2019'); await p.waitForTimeout(200); await p.screenshot({ path: out + 'n_search.png', clip: { x: 0, y: 0, width: 300, height: 600 } });
+ const m = await b.newPage({ viewport: { width: 390, height: 844 } });
+ await m.goto('file:///home/user/tnv/dist/Calculadora_Tarificacion_No_Vida.html'); await m.waitForTimeout(300);
+ await m.evaluate(() => UI.go(3, 't3-agregado', 'e18-3c')); await m.waitForFunction(() => document.querySelector('.caja-examen'), null, { timeout: 60000 });
+ await m.screenshot({ path: out + 'n_mob.png' });
+ await m.click('#menuBtn'); await m.waitForTimeout(300); await m.screenshot({ path: out + 'n_mob_menu.png' });
+ await b.close(); })();

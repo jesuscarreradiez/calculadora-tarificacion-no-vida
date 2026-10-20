@@ -1,0 +1,20 @@
+const T=require('../src/engine.js');
+function run(lbl,o,mu,a,b,exp){ const t0=Date.now(); const r=T.compound(Object.assign({mc:{n:100000,seed:12345}},o)); const D=r.dist;
+ const cv=D.CVaR(mu), cvm=r.mcDist.CVaR(mu);
+ console.log(`\n${lbl}  (${Date.now()-t0} ms, h=${r.h.toFixed(4)}, pts=${r.points}, cola=${r.massTail})`);
+ console.log(' E(y) formula',r.Ey,' panjer',D.mean,' mc',r.mcDist.mean);
+ console.log(' sd(y)',r.sdy,' panjer',D.sd);
+ console.log(' CVaR panjer',cv,' mc',cvm,' examen',exp.cv);
+ const P=a*D.mean+b*cv; console.log(' Prima',P,' examen',exp.P,' P(y>Π)',D.sf(P),' mc',r.mcDist.sf(P),' exam', exp.pl);
+}
+run('Junio 2026 2a',{freq:T.negbin(1,0.4),sev:T.lognormalMoments(1000,250)},0.05,1.03,0.05,{cv:7516.528836,P:1920.826442});
+run('Junio 2026 2c F=3000',{freq:T.negbin(1,0.4),sev:T.lognormalMoments(1000,250),F:3000},0.05,1.03,0.05,{cv:3001.2,P:1344.795601});
+run('Junio 2026 2d L=1200',{freq:T.negbin(1,0.4),sev:T.lognormalMoments(1000,250),L:1200},0.05,1.03,0.05,{cv:7165.192972,P:1851.963488});
+run('Junio 2023 2a',{freq:T.negbin(1.1,0.5),sev:T.lognormalMoments(100,150)},0.06,1,0,{cv:766.0145962});
+run('Junio 2025 3a',{freq:T.poisson(1),sev:T.gammaD(1,100)},0.01,1.05,0.1,{cv:755.1252288,P:180.5125229});
+run('Junio 2025 3b d=95',{freq:T.poisson(1),sev:T.gammaD(1,100),d:95},0.01,1.05,0.1,{P:94.0570830,pl:0.14995});
+run('Enero 2026 2b prior',{freq:T.negbin(1,1/3),sev:T.lognormalMoments(1000,500)},0.05,1.05,0.05,{cv:9770.040799,P:490.6020399});
+run('Enero 2026 2b post',{freq:T.negbin(5,9/11),sev:T.lognormalMoments(1000,500)},0.05,1.05,0.05,{cv:4730.701926,P:237.701763});
+run('Enero 2025 3b prior',{freq:T.poisson(0.8),sev:T.lognormalMoments(100,50)},0.1,1.1,0.1,{P:118.5384821});
+run('Enero 2025 3b post',{freq:T.poisson(0.571428571),sev:T.lognormalMoments(100,50)},0.1,1.1,0.1,{P:87.84963941});
+run('Junio 2024 3a',{freq:T.negbin(1,0.25),sev:T.gammaD(3,70),d:100},0.05,1.05,0.02,{});

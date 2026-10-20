@@ -1,0 +1,13 @@
+const { chromium } = require('playwright');
+const out = '/home/user/tnv/capturas/';
+(async () => { const b = await chromium.launch();
+ const p = await b.newPage({ viewport: { width: 1440, height: 900 } });
+ await p.goto('file:///home/user/tnv/dist/Calculadora_Tarificacion_No_Vida.html'); await p.waitForTimeout(300);
+ await p.evaluate(() => UI.go(0)); await p.waitForTimeout(200); await p.screenshot({ path: out + '1_inicio.png' });
+ await p.evaluate(() => UI.go('ex')); await p.waitForTimeout(200); await p.screenshot({ path: out + '2_examenes.png' });
+ await p.evaluate(() => UI.go(3, 't3-agregado', 'e14-3c'));
+ await p.waitForFunction(() => document.querySelector('.caja-examen'), null, { timeout: 60000 }); await p.waitForTimeout(300);
+ await p.screenshot({ path: out + '3_ejercicio.png' });
+ await p.evaluate(() => document.querySelector('.caja-examen').scrollIntoView({block:'start'})); await p.evaluate(() => window.scrollBy(0,-70)); await p.waitForTimeout(200);
+ await p.screenshot({ path: out + '4_respuesta_examen.png' });
+ await b.close(); })();
