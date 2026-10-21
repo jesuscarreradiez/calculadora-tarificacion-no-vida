@@ -62,3 +62,12 @@ engine.js (numérica, distribuciones, medidas, FFT/Panjer, MC) · ui.js (formula
 - Hoja «Octubre_6.xlsm»: cartera 1.000/5.000/10.000 (𝔼 5/8/12, σ 10/12/25, riesgo 100/200/280), CVaR95 con π exacto, cuatro combinaciones de recargos (k₁ máx; 0), (−1; k₂), (0; k₂ máx), (0,005; k₂), primas por póliza con coeficiente reductor ρ/Σρᵢ y «Suma de primas»; cuota-parte con retención 0,6 y coste 1,01·0,4·𝔼; stop-loss con deducible 165.000 (𝔼 y CVaR cedidos simulados). Ejemplos oct6-cp y oct6-sl en t8-recargos (cuadran al céntimo salvo lo simulado).
 - Macro «Sub Riesgos_SL»: VaR, CVaR, Wang, SW, DPT, SDPT de (y − U)⁺ con y normal/uniforme/log-normal/Erlang dada por media y desviación (Erlang con α redondeado; la uniforme tiene errata a = 2𝔼 − σ√3). En la app: grupo «Stop-loss» de la calculadora de medidas (ejemplo oct6-sl), modos «media y desviación» de la uniforme y «Erlang (α redondeado)».
 - t8-recargos muestra ahora las tablas de las cuatro combinaciones (cartera y cada póliza, con Σ nᵢΠᵢ), sin reaseguro y con reaseguro.
+
+## Navegación por ejercicio práctico (oct. 2026)
+- La barra lateral se organiza por prácticos del examen (UI.practico en home.js; `UI.goTool(id, ex)` abre una herramienta dentro de su práctico):
+  - Parte 1 · Práctico 1 «Cartera» (T4, T5, T6, T8): t8-recargos, t5-reaseguro, t4-medidas, t5-optimo, t4-normal, t4-param. Ej. 1 en 2026, Ej. 2 antes (Ej. 3 en E15; Ej. 5 extra en E14/E15). No sale en J23.
+  - Parte 1 · Práctico 2 «Frecuencia × severidad» (T1, T2, T3, T4, T7): t3-agregado, t1-dist, t2-freq, t1-suma, t2-suma. Ej. 2 en 2026, J23 y E15; Ej. 3 en el resto. Sale siempre.
+  - Parte 2 · Práctico 3 «Bonus-malus y credibilidad» (T3 + T10): t3-tipos, t3-mixtura; falta el tema 10. Ej. 4 casi siempre.
+  - Parte 2 · Práctico 4 «Regresiones» (T11–13): pendiente.
+  - «Consultar por tema» queda plegado al final.
+- Cada página de práctico: temas, en qué ejercicio sale, guía plegable «¿Qué herramienta uso para cada apartado?», botones de herramientas y, al final, los exámenes de ese práctico.

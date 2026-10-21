@@ -6,6 +6,7 @@ const UI = (function () {
   const T = TNV;
   const TEMAS = [];          // {n, title, short, color, desc, formulas:[[t, html]]}
   const TOOLS = [];          // herramientas registradas
+  const PRACTICOS = [];      // ejercicios prácticos del examen: {id, n, parte, title, short, temas, tools, top, bottom}
   const state = { tema: 0, toolByTema: {}, vals: {}, lastRes: {}, lastEx: {} };
 
   /* ───────── Utilidades DOM ───────── */
@@ -74,6 +75,12 @@ const UI = (function () {
   function tool(t) { TOOLS.push(t); }
   const toolById = id => TOOLS.find(t => t.id === id);
   const temaOf = n => TEMAS.find(t => t.n === n);
+  function practico(p) { PRACTICOS.push(p); }
+  const practicoOf = id => PRACTICOS.find(p => p.id === id);
+  const practicoOfTool = id => PRACTICOS.find(p => p.tools.includes(id));
+  const ctxTools = n => { const p = practicoOf(n); return p ? p.tools.map(toolById) : TOOLS.filter(t => t.tema === n); };
+  // Abre una herramienta dentro de su ejercicio práctico (o de su tema si no pertenece a ninguno)
+  const goTool = (id, exId) => { const p = practicoOfTool(id); go(p ? p.id : toolById(id).tema, id, exId); };
   const allFields = t => t.groups.flatMap(g => g.fields);
 
   /* ───────── Valores ───────── */
@@ -329,8 +336,8 @@ const UI = (function () {
       const qq = norm(q);
       const hits = [];
       for (const t of TOOLS) {
-        if (norm(t.title + ' ' + t.short + ' ' + (t.cuando || '')).includes(qq)) hits.push(navItem(t.title, { ico: `<b>${t.tema}</b>`, style: { '--tc': temaOf(t.tema).color }, go: () => go(t.tema, t.id) }));
-        for (const e of (t.examples || [])) if (norm(e.label).includes(qq)) hits.push(navItem(e.label, { ico: '📄', cls: 'nv-ex', style: { '--tc': temaOf(t.tema).color }, go: () => go(t.tema, t.id, e.id) }));
+        if (norm(t.title + ' ' + t.short + ' ' + (t.cuando || '')).includes(qq)) hits.push(navItem(t.title, { ico: `<b>${t.tema}</b>`, style: { '--tc': temaOf(t.tema).color }, go: () => goTool(t.id) }));
+        for (const e of (t.examples || [])) if (norm(e.label).includes(qq)) hits.push(navItem(e.label, { ico: '📄', cls: 'nv-ex', style: { '--tc': temaOf(t.tema).color }, go: () => goTool(t.id, e.id) }));
       }
       NAV.append(h('div', { class: 'nv-sec' }, hits.length ? `${hits.length} resultado${hits.length > 1 ? 's' : ''}` : 'Sin resultados'), ...hits.slice(0, 80));
       return;
@@ -338,21 +345,30 @@ const UI = (function () {
     NAV.append(navItem('Inicio', { ico: '⌂', on: state.tema === 0, go: () => go(0) }));
     const nEx = TOOLS.reduce((a, t) => a + (t.examples || []).length, 0);
     NAV.append(navItem('Ejercicios de examen', { ico: '📄', on: state.tema === 'ex', badge: String(nEx), go: () => go('ex') }));
-    if (VIEWS.guides) {
-      NAV.append(h('div', { class: 'nv-sec' }, 'Por ejercicio de examen'));
-      for (const g of VIEWS.guides) NAV.append(navItem(g.nav, { ico: g.ico, on: state.tema === g.id, go: () => go(g.id) }));
-    }
-    NAV.append(h('div', { class: 'nv-sec' }, 'Temario'));
-    for (const tm of [...TEMAS].sort((a, b) => a.n - b.n)) {
-      if (tm.off) { NAV.append(h('div', { class: 'nv-grp off' }, h('span', { class: 'nv-num' }, tm.offLabel || ''), h('span', null, 'Próximamente (6 y 7 ya van dentro de 3 y 8)'))); continue; }
-      const open = state.tema === tm.n;
-      const grp = h('div', { class: 'nv-grp' + (open ? ' open' : ''), style: { '--tc': tm.color } },
-        h('button', { type: 'button', class: 'nv-gh', onclick: () => { closeDrawer(); go(tm.n); } }, h('span', { class: 'nv-num' }, tm.n), h('span', { class: 'nv-gt' }, tm.title)));
+    const grpOf = (key, num, title, color, tools, off) => {
+      if (off) return h('div', { class: 'nv-grp off' }, h('span', { class: 'nv-num' }, num), h('span', { html: title }));
+      const open = state.tema === key;
+      const grp = h('div', { class: 'nv-grp' + (open ? ' open' : ''), style: { '--tc': color } },
+        h('button', { type: 'button', class: 'nv-gh', onclick: () => { closeDrawer(); go(key); } }, h('span', { class: 'nv-num' }, num), h('span', { class: 'nv-gt', html: title })));
       const list = h('div', { class: 'nv-tools' });
-      for (const t of TOOLS.filter(x => x.tema === tm.n)) list.append(navItem(t.title, { on: open && state.toolByTema[tm.n] === t.id, go: () => go(tm.n, t.id) }));
+      for (const t of tools) list.append(navItem(t.title, { on: open && state.toolByTema[key] === t.id, go: () => go(key, t.id) }));
       grp.append(list);
-      NAV.append(grp);
+      return grp;
+    };
+    for (const parte of [1, 2]) {
+      const ps = PRACTICOS.filter(p => p.parte === parte);
+      if (!ps.length) continue;
+      NAV.append(h('div', { class: 'nv-sec' }, parte === 1 ? 'Parte 1 · temas 1–8' : 'Parte 2 · temas 10–13'));
+      for (const p of ps) NAV.append(grpOf(p.id, p.n, p.nav + (p.soon ? ' <small>· en parte próximamente</small>' : ''), p.color, p.tools.map(toolById), !p.tools.length));
     }
+    const det = h('details', { class: 'nv-temas' }, h('summary', { class: 'nv-sec' }, 'Consultar por tema'));
+    det.open = !!state.showTemas || (typeof state.tema === 'number' && state.tema > 0);
+    det.addEventListener('toggle', () => { state.showTemas = det.open; });
+    for (const tm of [...TEMAS].sort((a, b) => a.n - b.n)) {
+      if (tm.off) { det.append(grpOf(null, tm.offLabel || '', 'Próximamente', null, [], true)); continue; }
+      det.append(grpOf(tm.n, tm.n, tm.title, tm.color, TOOLS.filter(x => x.tema === tm.n)));
+    }
+    NAV.append(det);
   }
   function setCrumb(parts) { CRUMB.innerHTML = parts.map((p, i) => `<span class="${i === parts.length - 1 ? 'cur' : ''}">${p}</span>`).join('<span class="sep">›</span>'); }
   function go(n, toolId, exId) {
@@ -361,7 +377,7 @@ const UI = (function () {
     store.set('nav', { tema: n, toolByTema: state.toolByTema });
     if (n === 0) { renderView('home'); setCrumb(['Inicio']); }
     else if (n === 'ex') { renderView('exams'); setCrumb(['Ejercicios de examen']); }
-    else if (typeof n === 'string' && VIEWS[n]) { renderView(n); setCrumb(['Por ejercicio de examen', VIEWS[n].title]); }
+    else if (practicoOf(n)) renderTema(n, exId);
     else renderTema(n, exId);
     renderNav();
     window.scrollTo({ top: 0 });
@@ -369,19 +385,33 @@ const UI = (function () {
   function renderView(k) { ROOT.innerHTML = ''; ROOT.append(VIEWS[k](h, go)); }
   let curTool = null, resBox = null;
   function renderTema(n, exId) {
-    const tm = temaOf(n);
+    const P_ = practicoOf(n);
     ROOT.innerHTML = '';
-    const tools = TOOLS.filter(t => t.tema === n);
-    const cur = toolById(state.toolByTema[n]) && toolById(state.toolByTema[n]).tema === n ? toolById(state.toolByTema[n]) : tools[0];
+    const tools = ctxTools(n);
+    if (P_ && !tools.length) {   // práctico todavía sin herramientas
+      setCrumb([`Parte ${P_.parte} · Práctico ${P_.n}`, P_.short]);
+      const wrap = h('div', { style: { '--tc': P_.color } });
+      wrap.append(h('div', { class: 'page-h' }, h('div', { class: 'page-k' }, h('span', { class: 'chip-n' }, `Práctico ${P_.n}`), `Parte ${P_.parte} del temario`), h('h2', null, P_.title)));
+      if (P_.top) wrap.append(P_.top(h, goTool, null, id => go(n, id)));
+      if (P_.bottom) wrap.append(P_.bottom(h, goTool));
+      ROOT.append(wrap); curTool = null; return;
+    }
+    const cur = tools.find(t => t.id === state.toolByTema[n]) || tools[0];
     state.toolByTema[n] = cur.id;
-    setCrumb([`Tema ${n} · ${tm.title}`, cur.title.replace(/<[^>]+>/g, '')]);
-    const wrap = h('div', { style: { '--tc': tm.color } });
-    wrap.append(h('div', { class: 'page-h' },
+    const tm = temaOf(cur.tema);
+    setCrumb(P_ ? [`Parte ${P_.parte} · Práctico ${P_.n}`, P_.short, cur.title.replace(/<[^>]+>/g, '')] : [`Tema ${n} · ${tm.title}`, cur.title.replace(/<[^>]+>/g, '')]);
+    const wrap = h('div', { style: { '--tc': P_ ? P_.color : tm.color } });
+    if (P_) {
+      wrap.append(h('div', { class: 'page-h' },
+        h('div', { class: 'page-k' }, h('span', { class: 'chip-n' }, `Práctico ${P_.n}`), `Parte ${P_.parte} · ${P_.title}`),
+        h('h2', { html: cur.title }), h('p', { html: cur.short })));
+      if (P_.top) wrap.append(P_.top(h, goTool, cur.id, id => go(n, id)));
+    } else wrap.append(h('div', { class: 'page-h' },
       h('div', { class: 'page-k' }, h('span', { class: 'chip-n' }, 'Tema ' + n), tm.title),
       h('h2', { html: cur.title }), h('p', { html: cur.short })));
-    if (tools.length > 1) wrap.append(h('div', { class: 'seg' }, tools.map(t => h('button', { type: 'button', class: 'seg-b' + (t === cur ? ' on' : ''), onclick: () => go(n, t.id), html: t.title }))));
+    if (tools.length > 1) wrap.append(h('div', { class: 'seg' }, tools.map(t => h('button', { type: 'button', class: 'seg-b' + (t === cur ? ' on' : ''), onclick: () => go(n, t.id), html: (P_ ? `<span class="seg-t">T${t.tema}</span> ` : '') + t.title }))));
     if (tm.formulas && tm.formulas.length) {
-      wrap.append(h('details', { class: 'formulas' }, h('summary', null, 'Fórmulas clave del tema'),
+      wrap.append(h('details', { class: 'formulas' }, h('summary', null, `Fórmulas clave del tema ${tm.n}`),
         h('div', { class: 'fgrid' }, tm.formulas.map(f => h('div', { class: 'fitem' }, h('b', null, f[0]), h('div', { class: 'fx', html: f[1] }))))));
     }
     const work = h('div', { class: 'work' });
@@ -389,6 +419,7 @@ const UI = (function () {
     resBox = h('div', { class: 'panel res' });
     work.append(h('div', { class: 'panel form' }, form), resBox);
     wrap.append(work);
+    if (P_ && P_.bottom) wrap.append(P_.bottom(h, goTool));
     ROOT.append(wrap);
     curTool = cur;
     const ex = exId && cur.examples ? cur.examples.find(e => e.id === exId) : null;
@@ -417,7 +448,7 @@ const UI = (function () {
     });
     root.append(h('div', { class: 'btns' },
       h('button', { class: 'btn', type: 'button', onclick: solveCurrent }, 'Resolver'),
-      h('button', { class: 'btn2', type: 'button', title: 'Volver a los valores por defecto', onclick: () => { state.vals[t.id] = defaults(t); save(t); delete state.lastRes[t.id]; delete state.lastEx[t.id]; go(t.tema, t.id); } }, 'Limpiar')));
+      h('button', { class: 'btn2', type: 'button', title: 'Volver a los valores por defecto', onclick: () => { state.vals[t.id] = defaults(t); save(t); delete state.lastRes[t.id]; delete state.lastEx[t.id]; go(ctxTools(state.tema).includes(t) ? state.tema : t.tema, t.id); } }, 'Limpiar')));
     refreshVisibility(root, t, vals);
     return root;
   }
@@ -432,7 +463,7 @@ const UI = (function () {
   function renderTemaKeep(t) {
     const exs = state.lastEx[t.id];
     delete state.lastRes[t.id];
-    renderTema(t.tema);
+    renderTema(ctxTools(state.tema).includes(t) ? state.tema : t.tema);
     state.lastEx[t.id] = exs;
   }
   function solveCurrent() { if (curTool) solve(curTool, state.lastEx[curTool.id]); }
@@ -474,7 +505,7 @@ const UI = (function () {
     document.getElementById('q').addEventListener('input', renderNav);
     document.addEventListener('keydown', e => { if (e.key === '/' && document.activeElement.tagName !== 'INPUT') { e.preventDefault(); document.body.classList.add('drawer'); document.getElementById('q').focus(); } });
     const t0 = nav ? nav.tema : 0;
-    go(t0 === 'ex' || (typeof t0 === 'string' && VIEWS[t0]) ? t0 : (t0 && temaOf(t0) && !temaOf(t0).off ? t0 : 0));
+    go(t0 === 'ex' || practicoOf(t0) ? t0 : (t0 && temaOf(t0) && !temaOf(t0).off ? t0 : 0));
   }
-  return { tema, tool, start, go, h, eq, v, result, TOOLS, TEMAS, toolById };
+  return { tema, tool, practico, start, go, goTool, h, eq, v, result, TOOLS, TEMAS, PRACTICOS, toolById, practicoOfTool };
 })();
