@@ -111,6 +111,7 @@ const UI = (function () {
       n(id, opt) {
         const s = raw[id];
         if ((s === '' || s === undefined) && opt && opt.opt) return null;
+        if (s === '' || s === undefined) throw new Error(`Falta el dato «${lab[id] || id}».`);
         const x = T.parseNum(s);
         if (isNaN(x)) throw new Error(`Revisa el dato «${lab[id] || id}»: «${s === undefined ? '' : s}» no es un número.`);
         if (opt && opt.pos && !(x > 0)) throw new Error(`«${lab[id] || id}» debe ser positivo.`);
@@ -233,6 +234,21 @@ const UI = (function () {
     if (f.help) wrap.append(h('div', { class: 'help', html: f.help }));
     return wrap;
   }
+  // Marca los datos que siguen con el valor de ejemplo (para no olvidar cambiarlos en un examen nuevo)
+  function markDefaults(root, t, vals) {
+    const warn = root.querySelector('.def-warn'); if (!warn) return;
+    if (state.lastEx[t.id]) { root.querySelectorAll('.is-def').forEach(e => e.classList.remove('is-def')); warn.style.display = 'none'; return; }
+    const d = defaults(t); let n = 0;
+    for (const f of allFields(t)) {
+      if (!['num', 'text', 'rows'].includes(f.type)) continue;
+      const el = root.querySelector(`.fld[data-f="${f.id}"]`); if (!el) continue;
+      const dv = JSON.stringify(d[f.id]), on = dv !== undefined && dv !== '""' && dv !== '"0"' && dv !== '[]' && JSON.stringify(vals[f.id]) === dv &&
+        el.style.display !== 'none' && !el.closest('details:not([open])') && !(el.closest('[data-g]') && el.closest('[data-g]').style.display === 'none');
+      el.classList.toggle('is-def', on); if (on) n++;
+    }
+    warn.style.display = n ? '' : 'none';
+    warn.innerHTML = `<b>${n} dato${n > 1 ? 's' : ''} con el valor de ejemplo</b> (marcado${n > 1 ? 's' : ''} en amarillo): cámbialo${n > 1 ? 's' : ''} por los de tu enunciado, o déjalo${n > 1 ? 's' : ''} si coinciden.`;
+  }
   function refreshVisibility(root, t, vals) {
     for (const f of allFields(t)) {
       if (!f.show) continue;
@@ -265,10 +281,11 @@ const UI = (function () {
         x.hint ? h('div', { class: 'th', html: x.hint }) : null))));
     }
     if (r.exam.length) {
+      const cp = () => h('button', { class: 'ce-cp', type: 'button', title: 'Copiar sólo este apartado', onclick: e => copyText(e.target.closest('.ce-p'), e.target) }, '⧉');
       const body = h('div', { class: 'caja-examen-body' }, r.exam.map(p => p.f && p.f.length
-        ? h('div', { class: 'ce-p' }, p.lab ? h('div', { class: 'ce-lab', html: p.lab }) : null,
+        ? h('div', { class: 'ce-p' }, cp(), p.lab ? h('div', { class: 'ce-lab', html: p.lab }) : null,
           h('div', { class: 'ce-f' }, p.f.map(k => h('div', { html: FORMULAS[k] }))), h('div', { html: p.html }))
-        : h('div', { class: 'ce-p' }, p.lab ? h('span', { class: 'ce-lab', html: p.lab }) : null, h('span', { html: p.html }))));
+        : h('div', { class: 'ce-p' }, cp(), p.lab ? h('span', { class: 'ce-lab', html: p.lab }) : null, h('span', { html: p.html }))));
       if (r.pend.length) body.append(h('div', { class: 'ce-p ce-left' }, h('div', { class: 'ce-f' }, r.pend.map(k => h('div', { html: FORMULAS[k] })))));
       box.append(h('div', { class: 'caja-examen' },
         h('div', { class: 'caja-examen-header' }, h('span', null, 'Respuesta de examen — copia esto'),
@@ -316,7 +333,7 @@ const UI = (function () {
     return h('div');
   }
   function copyText(box, btn) {
-    const txt = box.innerText.replace(/Copiar (procedimiento|respuesta)\s*(Imprimir)?\s*/g, '').trim();
+    const txt = box.innerText.replace(/Copiar (procedimiento|respuesta)\s*(Imprimir)?\s*/g, '').replace(/[⧉✓]\s*/g, '').trim();
     const done = () => { const o = btn.textContent; btn.textContent = '✓ Copiado'; setTimeout(() => btn.textContent = o, 1400); };
     try { navigator.clipboard.writeText(txt).then(done, () => fallback()); } catch (e) { fallback(); }
     function fallback() { const ta = h('textarea'); ta.value = txt; document.body.append(ta); ta.select(); try { document.execCommand('copy'); done(); } catch (e) { } ta.remove(); }
@@ -439,7 +456,7 @@ const UI = (function () {
       top.append(sel);
     }
     root.append(top);
-    const onChange = (f, typing) => { save(t); if (!typing) refreshVisibility(root, t, vals); };
+    const onChange = (f, typing) => { save(t); delete state.lastEx[t.id]; if (!typing) refreshVisibility(root, t, vals); markDefaults(root, t, vals); };
     t.groups.forEach((g, gi) => {
       const grid = h('div', { class: 'fg' }, g.fields.map(f => renderField(t, f, vals, onChange)));
       let box;
@@ -447,10 +464,13 @@ const UI = (function () {
       else box = h('fieldset', { 'data-g': gi }, g.title ? h('legend', null, g.title) : null, grid);
       root.append(box);
     });
+    root.append(h('div', { class: 'def-warn', style: { display: 'none' } }));
     root.append(h('div', { class: 'btns' },
       h('button', { class: 'btn', type: 'button', onclick: solveCurrent }, 'Resolver'),
       h('button', { class: 'btn2', type: 'button', title: 'Volver a los valores por defecto', onclick: () => { state.vals[t.id] = defaults(t); save(t); delete state.lastRes[t.id]; delete state.lastEx[t.id]; go(ctxTools(state.tema).includes(t) ? state.tema : t.tema, t.id); } }, 'Limpiar')));
     refreshVisibility(root, t, vals);
+    root.addEventListener('toggle', () => markDefaults(root, t, vals), true);
+    setTimeout(() => markDefaults(root, t, vals), 0);
     return root;
   }
   function loadExample(t, ex) {
