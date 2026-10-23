@@ -199,13 +199,14 @@ const VIEWS = (function () {
       title: 'Frecuencia × severidad: coste agregado de una póliza', temas: [1, 2, 3, 4, 7],
       when: 'Ej. 2 en Enero y Junio 2026, Junio 2023 y Enero 2015 · Ej. 3 en todas las demás. Sale en las 16 convocatorias.',
       intro: '«La frecuencia es … y la severidad es …». Casi todo sale de <b>Coste agregado</b>, rellenando sólo los campos opcionales que correspondan a lo que preguntan.',
-      tools: ['t3-agregado', 't1-dist', 't2-freq', 't1-suma', 't2-suma'],
+      tools: ['t3-agregado', 't3-momentos', 't1-dist', 't2-freq', 't1-suma', 't2-suma'],
       steps: [
         ['Media y desviación, VaR/CVaR, prima Π = a𝔼 + bρ, riesgo del asegurador, IP(pérdida), IP(y = 0)', 't3-agregado', 'Frecuencia, severidad, medida y a, b.'],
         ['Franquicia, indemnización máxima por siniestro o anual', 't3-agregado', 'Grupo «Franquicia e indemnizaciones máximas».'],
         ['Segunda prima, k mínimo, IP(ganar ≥ ½Π), condicionado a N, tabla de Panjer', 't3-agregado', 'Campos opcionales del grupo «Medida de riesgo y principio de prima».'],
         ['Cartera de n pólizas, n mínimo', 't3-agregado', 'Grupo «Cartera de n pólizas».'],
         ['Prima a priori / a posteriori y % de reducción', 't3-agregado', 'Dos veces; en la segunda, la prima a priori en «Prima de referencia».'],
+        ['Severidad mezcla de tipos (leve/grave), índices de mixtura de S y de y, severidades correlacionadas (sólo momentos)', 't3-momentos', 'Tipos con probabilidad, media y desviación; la frecuencia; la correlación si la hay.'],
         ['Parámetros de la severidad, percentiles, 𝔼((S − d)⁺)', 't1-dist', 'La distribución de la severidad.'],
         ['Distribución de N, Poisson–Gamma → BN, IP(N = x)', 't2-freq', 'La frecuencia.'],
         ['Suma de exponenciales o de normales; suma de frecuencias', 't1-suma', 'Los sumandos.']

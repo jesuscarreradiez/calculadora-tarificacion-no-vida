@@ -629,6 +629,82 @@
     ]
   });
 
+  /* ═════════ T3 · Momentos: severidad por tipos y coste agregado ═════════ */
+  UI.tool({
+    id: 't3-momentos', tema: 3, title: 'Momentos e índices de mixtura: severidad por tipos',
+    short: 'Severidad mezcla de tipos (leve/grave…) y coste agregado: medias, varianzas, índices de mixtura y ratios; con severidades correlacionadas.',
+    cuando: '«Los siniestros pueden ser leves (media …, desviación …, probabilidad …) o graves (…)» y «la frecuencia es …»: media, varianza, índice de mixtura de la severidad y del coste agregado.',
+    que: 'Trabaja sólo con momentos. La severidad es una mixtura de tipos: su media es la media de las medias y su varianza = varianza de las medias + media de las varianzas (ec. 27). El coste agregado y = S₁ + … + S<sub>N</sub> es otra mixtura (condicionando a N): media de varianzas 𝔼(N)σ²(S) y varianza de medias 𝔼(S)²σ²(N) (ec. 26). Si las severidades están correlacionadas, la media de varianzas añade rσ²(S)𝔼(N(N − 1)).',
+    groups: [
+      {
+        title: 'Severidad S', fields: [
+          { id: 'sm', type: 'sel', label: 'La severidad es', def: 'tipos', opts: [['tipos', 'Mixtura de tipos (probabilidad, media, desviación)'], ['una', 'Una sola: media y desviación']], wide: true },
+          { id: 'sev', type: 'rows', label: 'Tipos de siniestro', cols: [{ id: 'nom', label: 'Tipo', type: 'text' }, { id: 'p', label: 'Probabilidad' }, { id: 'E', label: 'Media' }, { id: 'sd', label: 'Desviación' }], def: [{ nom: 'Leve', p: '0,99', E: '10', sd: '100' }, { nom: 'Grave', p: '0,01', E: '1000', sd: '1.000.000' }], show: v => v.sm === 'tipos' },
+          { id: 'SE', type: 'num', label: '𝔼(S)', def: '20', show: v => v.sm === 'una' }, { id: 'Ssd', type: 'num', label: 'σ(S)', def: '100', show: v => v.sm === 'una' }
+        ]
+      },
+      { title: 'Frecuencia N', fields: P.famFields('N_', P.FR, Object.keys(P.FR), 'tabla', { N_tp: '0,7; 0,2; 0,1' }) },
+      { title: 'Correlación entre severidades (opcional)', optional: true, openIf: v => v.rc, fields: [{ id: 'rc', type: 'num', label: 'Correlación r entre dos severidades del mismo año', def: '', ph: 'independientes (0)', wide: true }] }
+    ],
+    solve(V, { result }) {
+      const R = result();
+      let ES, VS, txtS;
+      if (V.s('sm') === 'tipos') {
+        const ts = V.raw.sev ? V.raw.sev.map((r, i) => {
+          const p = T.parseNum(r.p), E = T.parseNum(r.E), sd = T.parseNum(r.sd);
+          if ([p, E, sd].some(isNaN)) throw new Error(`Revisa el tipo ${i + 1}.`);
+          return { nom: String(r.nom || 'Tipo ' + (i + 1)), p, E, sd };
+        }) : [];
+        if (!ts.length) throw new Error('Añade al menos un tipo de siniestro.');
+        const sp = ts.reduce((a, t) => a + t.p, 0); if (Math.abs(sp - 1) > 1e-6) throw new Error(`Las probabilidades de los tipos suman ${f(sp)}.`);
+        ES = ts.reduce((a, t) => a + t.p * t.E, 0);
+        const Vm = ts.reduce((a, t) => a + t.p * t.E * t.E, 0) - ES * ES, Ev = ts.reduce((a, t) => a + t.p * t.sd * t.sd, 0);
+        VS = Vm + Ev;
+        R.tile('𝔼(S)', ES).tile('σ²(S)', VS).tile('Índice de mixtura de S', Vm / Ev);
+        R.key('ES', ES).key('VmS', Vm).key('EvS', Ev).key('VS', VS).key('IS', Vm / Ev);
+        R.table('Severidad (mixtura de tipos)', ['Concepto', 'Valor'], [['Esperanza 𝔼(S)', ES], ['Varianza de medias', Vm], ['Media de varianzas', Ev], ['Varianza σ²(S)', VS], ['Índice de mixtura', Vm / Ev], ['Desviación σ(S)', Math.sqrt(VS)], ['Ratio media/desviación', ES / Math.sqrt(VS)], ['Ratio desviación/media', Math.sqrt(VS) / ES]]);
+        R.step('Severidad: mixtura de tipos (ec. 27–28)', eq(`𝔼(S) = Σ pᵢ𝔼ᵢ = ${ts.map(t => `${f(t.p)} × ${f(t.E)}`).join(' + ')} = ${vv(ES)}`) +
+          eq(`Varianza de medias = Σ pᵢ𝔼ᵢ² − 𝔼(S)² = ${ts.map(t => `${f(t.p)} × ${f(t.E)}²`).join(' + ')} − ${f(ES)}² = ${vv(Vm)}`) +
+          eq(`Media de varianzas = Σ pᵢσᵢ² = ${ts.map(t => `${f(t.p)} × ${f(t.sd)}²`).join(' + ')} = ${vv(Ev)}`) +
+          eq(`σ²(S) = ${f(Vm)} + ${f(Ev)} = ${vv(VS)}; &nbsp; I = ${f(Vm)}/${f(Ev)} = ${vv(Vm / Ev)}`));
+        R.uses('mixt27', 'mixt28');
+        R.ans('Severidad.', `La severidad es una mixtura de ${ts.map(t => `${t.nom.toLowerCase()} (probabilidad ${f(t.p)}, media ${f(t.E)}, desviación ${f(t.sd)})`).join(' y ')}. Su esperanza es ${ts.map(t => `${f(t.p)} × ${f(t.E)}`).join(' + ')} = ${vv(ES)}; la varianza de las medias vale ${vv(Vm)} y la media de las varianzas ${vv(Ev)}, luego σ²(S) = ${vv(VS)} (σ(S) = ${vv(Math.sqrt(VS))}) y el índice de mixtura es ${f(Vm)}/${f(Ev)} = ${vv(Vm / Ev)}. Ratio media/desviación = ${vv(ES / Math.sqrt(VS))}; desviación/media = ${vv(Math.sqrt(VS) / ES)}.`);
+        txtS = 'mixtura';
+      } else {
+        ES = V.n('SE'); const sd = V.n('Ssd', { pos: 1 }); VS = sd * sd; txtS = 'dada';
+        R.tile('𝔼(S)', ES).tile('σ²(S)', VS);
+      }
+      const Nb = P.buildFam(V, 'N_', P.FR), N = Nb.D, EN = N.mean, VN = N.var, ENN = VN + EN * EN - EN;
+      const agg = r => { const Ev = EN * VS + r * VS * ENN, Vm = ES * ES * VN, Vy = Ev + Vm, E = EN * ES; return { E, Ev, Vm, Vy, I: Vm / Ev, sd: Math.sqrt(Vy) }; };
+      const a0 = agg(0), rc = V.nOpt('rc'), a1 = rc ? agg(rc) : null;
+      R.tile('𝔼(y)', a0.E, { main: true }).tile('σ²(y)', a0.Vy, { main: true }).tile('Índice de mixtura de y', a0.I, { main: true });
+      if (a1) R.tile(`σ²(y) con r = ${f(rc)}`, a1.Vy, { main: true }).tile(`Índice con r = ${f(rc)}`, a1.I);
+      R.key('Ey', a0.E).key('Evy', a0.Ev).key('Vmy', a0.Vm).key('Vy', a0.Vy).key('Iy', a0.I);
+      if (a1) R.key('Evy_r', a1.Ev).key('Vy_r', a1.Vy).key('Iy_r', a1.I);
+      const cols = ['Concepto', 'Independientes', ...(a1 ? [`Correlación r = ${f(rc)}`] : [])];
+      const rowv = (l, k) => [l, a0[k], ...(a1 ? [a1[k]] : [])];
+      R.table('Coste agregado y = S₁ + … + S<sub>N</sub>', cols, [rowv('Esperanza 𝔼(y)', 'E'), rowv('Media de varianzas 𝔼(σ²(y|N))', 'Ev'), rowv('Varianza de medias σ²(𝔼(y|N))', 'Vm'), rowv('Varianza σ²(y)', 'Vy'), rowv('Índice de mixtura', 'I'), rowv('Desviación σ(y)', 'sd'),
+        ['Ratio media/desviación', a0.E / a0.sd, ...(a1 ? [a1.E / a1.sd] : [])], ['Ratio desviación/media', a0.sd / a0.E, ...(a1 ? [a1.sd / a1.E] : [])]]);
+      R.step('Frecuencia', Nb.ex + eq(`𝔼(N) = ${vv(EN)}, σ²(N) = ${vv(VN)}, 𝔼(N(N − 1)) = σ²(N) + 𝔼(N)² − 𝔼(N) = ${vv(ENN)}`));
+      R.step('Coste agregado (ec. 26)', eq(`𝔼(y) = 𝔼(N)𝔼(S) = ${f(EN)} × ${f(ES)} = ${vv(a0.E)}`) + eq(`Media de varianzas = 𝔼(N)σ²(S) = ${f(EN)} × ${f(VS)} = ${vv(a0.Ev)}`) +
+        eq(`Varianza de medias = 𝔼(S)²σ²(N) = ${f(ES)}² × ${f(VN)} = ${vv(a0.Vm)}`) + eq(`σ²(y) = ${vv(a0.Vy)}; &nbsp; I = ${vv(a0.I)}`) +
+        (a1 ? eq(`Con correlación r = ${f(rc)}: media de varianzas = ${f(EN)} × ${f(VS)} + ${f(rc)} × ${f(VS)} × ${f(ENN)} = ${vv(a1.Ev)}; σ²(y) = ${vv(a1.Vy)}; I = ${vv(a1.I)}`) : ''));
+      R.uses(Nb.fam === 'poisson' ? 'pois' : Nb.fam === 'binneg' ? 'nb24' : null, 'comp26');
+      R.ans('Coste agregado.', `${Nb.ex} Condicionando al número de siniestros, 𝔼(y) = 𝔼(N)𝔼(S) = ${f(EN)} × ${f(ES)} = ${vv(a0.E)}; la media de las varianzas es 𝔼(N)σ²(S) = ${vv(a0.Ev)} y la varianza de las medias 𝔼(S)²σ²(N) = ${vv(a0.Vm)}. Por tanto σ²(y) = ${vv(a0.Vy)}, σ(y) = ${vv(a0.sd)} y el índice de mixtura es ${f(a0.Vm)}/${f(a0.Ev)} = ${vv(a0.I)}.`);
+      if (a1) {
+        R.uses('corrS');
+        R.ans('Severidades correlacionadas.', `Si dos severidades del mismo año tienen correlación ${f(rc)}, σ²(S₁ + … + S<sub>n</sub>) = nσ²(S) + n(n − 1)·${f(rc)}·σ²(S), y la media de las varianzas pasa a ser ${f(EN)} × ${f(VS)} + ${f(rc)} × ${f(VS)} × 𝔼(N(N − 1)) = ${vv(a1.Ev)} (𝔼(N(N − 1)) = ${f(ENN)}). La varianza de las medias no cambia, así que σ²(y) = ${vv(a1.Vy)}, σ(y) = ${vv(a1.sd)} y el índice de mixtura baja a ${vv(a1.I)}: la correlación aumenta el riesgo.`);
+      }
+      return R;
+    },
+    examples: [{
+      id: 'oct20-mix', label: 'Clase 20 oct. 2026 · severidad leve/grave, N ∈ {0, 1, 2}, correlación 0,2',
+      values: { sm: 'tipos', sev: [{ nom: 'Leve', p: '0,99', E: '10', sd: '100' }, { nom: 'Grave', p: '0,01', E: '1000', sd: '1.000.000' }], N_fam: 'tabla', N_tx: '0; 1; 2', N_tp: '0,7; 0,2; 0,1', rc: '0,2' },
+      expect: [{ k: 'ES', l: '𝔼(S)', v: 19.9, src: 'hoja Oct_20_II' }, { k: 'VmS', l: 'Varianza de medias de S', v: 9702.99 }, { k: 'IS', l: 'Índice de mixtura de S', v: 9702.99 / 10000009900 }, { k: 'Ey', l: '𝔼(y)', v: 7.96 }, { k: 'Vy', l: 'σ²(y)', v: 0.4 * (9702.99 + 10000009900) + 19.9 * 19.9 * 0.44 }, { k: 'Vy_r', l: 'σ²(y) con r = 0,2', v: (9702.99 + 10000009900) * (0.2 + 0.1 * 2.4) + 19.9 * 19.9 * 0.44 }],
+      note: 'Hoja de clase (no es de examen). En la hoja la desviación del siniestro grave es 1.000.000 (así se usa en «Media Varianzas»); si en un enunciado te dan la varianza, escribe su raíz.'
+    }]
+  });
+
   /* ═════════ T3 · Mixtura paramétrica ═════════ */
   const COND = {
     poisson: { lab: 'Poisson(Λ)', c: () => [1, 0], d: () => [0, 1, 0], txt: '𝔼(y|Λ) = Λ, σ²(y|Λ) = Λ' },

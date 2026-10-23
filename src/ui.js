@@ -67,6 +67,7 @@ const UI = (function () {
     k78: 'Con reaseguro: k̃₂ = (ρ(−y<sub>r</sub>) + Π<sub>R</sub>)/ρ(−y) − R₀/ρ(−y) − (𝔼(y)/ρ(−y))(1 + k̃₁) (ec. 78)',
     k88: 'Por póliza: k₁ igual, k₂<sup>(p)</sup> = k₂·ρ(−y)/Σρ(−yᵢ) (ec. 88)',
     inv80: 'Inversión: B = A<sup>−1</sup>𝔼(r − r₀)/ρ<sub>(0,1)</sub>, M = 1/√(1 − BᵗAB), x = Mσ(y)B/Π, Π* = Π + ρ(R)/(1 + r₀) (ec. 79–83)',
+    corrS: 'Severidades correlacionadas (correlación r): σ²(y|N = n) = nσ²(S) + n(n − 1)rσ²(S) ⇒ 𝔼(σ²(y|N)) = 𝔼(N)σ²(S) + rσ²(S)𝔼(N(N − 1)); σ²(𝔼(y|N)) = 𝔼(S)²σ²(N)',
     mc72: 'Monte Carlo (§7.2): simular N; si N > 0 simular S₁…S<sub>N</sub> y sumar; repetir M veces; estimar 𝔼, σ, VaR (percentil) y CVaR (media de la cola)'
   };
 

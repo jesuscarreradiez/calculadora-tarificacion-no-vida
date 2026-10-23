@@ -1276,6 +1276,7 @@ const UI = (function () {
     k78: 'Con reaseguro: k̃₂ = (ρ(−y<sub>r</sub>) + Π<sub>R</sub>)/ρ(−y) − R₀/ρ(−y) − (𝔼(y)/ρ(−y))(1 + k̃₁) (ec. 78)',
     k88: 'Por póliza: k₁ igual, k₂<sup>(p)</sup> = k₂·ρ(−y)/Σρ(−yᵢ) (ec. 88)',
     inv80: 'Inversión: B = A<sup>−1</sup>𝔼(r − r₀)/ρ<sub>(0,1)</sub>, M = 1/√(1 − BᵗAB), x = Mσ(y)B/Π, Π* = Π + ρ(R)/(1 + r₀) (ec. 79–83)',
+    corrS: 'Severidades correlacionadas (correlación r): σ²(y|N = n) = nσ²(S) + n(n − 1)rσ²(S) ⇒ 𝔼(σ²(y|N)) = 𝔼(N)σ²(S) + rσ²(S)𝔼(N(N − 1)); σ²(𝔼(y|N)) = 𝔼(S)²σ²(N)',
     mc72: 'Monte Carlo (§7.2): simular N; si N > 0 simular S₁…S<sub>N</sub> y sumar; repetir M veces; estimar 𝔼, σ, VaR (percentil) y CVaR (media de la cola)'
   };
 
@@ -2644,6 +2645,82 @@ const P = (function () {
     ]
   });
 
+  /* ═════════ T3 · Momentos: severidad por tipos y coste agregado ═════════ */
+  UI.tool({
+    id: 't3-momentos', tema: 3, title: 'Momentos e índices de mixtura: severidad por tipos',
+    short: 'Severidad mezcla de tipos (leve/grave…) y coste agregado: medias, varianzas, índices de mixtura y ratios; con severidades correlacionadas.',
+    cuando: '«Los siniestros pueden ser leves (media …, desviación …, probabilidad …) o graves (…)» y «la frecuencia es …»: media, varianza, índice de mixtura de la severidad y del coste agregado.',
+    que: 'Trabaja sólo con momentos. La severidad es una mixtura de tipos: su media es la media de las medias y su varianza = varianza de las medias + media de las varianzas (ec. 27). El coste agregado y = S₁ + … + S<sub>N</sub> es otra mixtura (condicionando a N): media de varianzas 𝔼(N)σ²(S) y varianza de medias 𝔼(S)²σ²(N) (ec. 26). Si las severidades están correlacionadas, la media de varianzas añade rσ²(S)𝔼(N(N − 1)).',
+    groups: [
+      {
+        title: 'Severidad S', fields: [
+          { id: 'sm', type: 'sel', label: 'La severidad es', def: 'tipos', opts: [['tipos', 'Mixtura de tipos (probabilidad, media, desviación)'], ['una', 'Una sola: media y desviación']], wide: true },
+          { id: 'sev', type: 'rows', label: 'Tipos de siniestro', cols: [{ id: 'nom', label: 'Tipo', type: 'text' }, { id: 'p', label: 'Probabilidad' }, { id: 'E', label: 'Media' }, { id: 'sd', label: 'Desviación' }], def: [{ nom: 'Leve', p: '0,99', E: '10', sd: '100' }, { nom: 'Grave', p: '0,01', E: '1000', sd: '1.000.000' }], show: v => v.sm === 'tipos' },
+          { id: 'SE', type: 'num', label: '𝔼(S)', def: '20', show: v => v.sm === 'una' }, { id: 'Ssd', type: 'num', label: 'σ(S)', def: '100', show: v => v.sm === 'una' }
+        ]
+      },
+      { title: 'Frecuencia N', fields: P.famFields('N_', P.FR, Object.keys(P.FR), 'tabla', { N_tp: '0,7; 0,2; 0,1' }) },
+      { title: 'Correlación entre severidades (opcional)', optional: true, openIf: v => v.rc, fields: [{ id: 'rc', type: 'num', label: 'Correlación r entre dos severidades del mismo año', def: '', ph: 'independientes (0)', wide: true }] }
+    ],
+    solve(V, { result }) {
+      const R = result();
+      let ES, VS, txtS;
+      if (V.s('sm') === 'tipos') {
+        const ts = V.raw.sev ? V.raw.sev.map((r, i) => {
+          const p = T.parseNum(r.p), E = T.parseNum(r.E), sd = T.parseNum(r.sd);
+          if ([p, E, sd].some(isNaN)) throw new Error(`Revisa el tipo ${i + 1}.`);
+          return { nom: String(r.nom || 'Tipo ' + (i + 1)), p, E, sd };
+        }) : [];
+        if (!ts.length) throw new Error('Añade al menos un tipo de siniestro.');
+        const sp = ts.reduce((a, t) => a + t.p, 0); if (Math.abs(sp - 1) > 1e-6) throw new Error(`Las probabilidades de los tipos suman ${f(sp)}.`);
+        ES = ts.reduce((a, t) => a + t.p * t.E, 0);
+        const Vm = ts.reduce((a, t) => a + t.p * t.E * t.E, 0) - ES * ES, Ev = ts.reduce((a, t) => a + t.p * t.sd * t.sd, 0);
+        VS = Vm + Ev;
+        R.tile('𝔼(S)', ES).tile('σ²(S)', VS).tile('Índice de mixtura de S', Vm / Ev);
+        R.key('ES', ES).key('VmS', Vm).key('EvS', Ev).key('VS', VS).key('IS', Vm / Ev);
+        R.table('Severidad (mixtura de tipos)', ['Concepto', 'Valor'], [['Esperanza 𝔼(S)', ES], ['Varianza de medias', Vm], ['Media de varianzas', Ev], ['Varianza σ²(S)', VS], ['Índice de mixtura', Vm / Ev], ['Desviación σ(S)', Math.sqrt(VS)], ['Ratio media/desviación', ES / Math.sqrt(VS)], ['Ratio desviación/media', Math.sqrt(VS) / ES]]);
+        R.step('Severidad: mixtura de tipos (ec. 27–28)', eq(`𝔼(S) = Σ pᵢ𝔼ᵢ = ${ts.map(t => `${f(t.p)} × ${f(t.E)}`).join(' + ')} = ${vv(ES)}`) +
+          eq(`Varianza de medias = Σ pᵢ𝔼ᵢ² − 𝔼(S)² = ${ts.map(t => `${f(t.p)} × ${f(t.E)}²`).join(' + ')} − ${f(ES)}² = ${vv(Vm)}`) +
+          eq(`Media de varianzas = Σ pᵢσᵢ² = ${ts.map(t => `${f(t.p)} × ${f(t.sd)}²`).join(' + ')} = ${vv(Ev)}`) +
+          eq(`σ²(S) = ${f(Vm)} + ${f(Ev)} = ${vv(VS)}; &nbsp; I = ${f(Vm)}/${f(Ev)} = ${vv(Vm / Ev)}`));
+        R.uses('mixt27', 'mixt28');
+        R.ans('Severidad.', `La severidad es una mixtura de ${ts.map(t => `${t.nom.toLowerCase()} (probabilidad ${f(t.p)}, media ${f(t.E)}, desviación ${f(t.sd)})`).join(' y ')}. Su esperanza es ${ts.map(t => `${f(t.p)} × ${f(t.E)}`).join(' + ')} = ${vv(ES)}; la varianza de las medias vale ${vv(Vm)} y la media de las varianzas ${vv(Ev)}, luego σ²(S) = ${vv(VS)} (σ(S) = ${vv(Math.sqrt(VS))}) y el índice de mixtura es ${f(Vm)}/${f(Ev)} = ${vv(Vm / Ev)}. Ratio media/desviación = ${vv(ES / Math.sqrt(VS))}; desviación/media = ${vv(Math.sqrt(VS) / ES)}.`);
+        txtS = 'mixtura';
+      } else {
+        ES = V.n('SE'); const sd = V.n('Ssd', { pos: 1 }); VS = sd * sd; txtS = 'dada';
+        R.tile('𝔼(S)', ES).tile('σ²(S)', VS);
+      }
+      const Nb = P.buildFam(V, 'N_', P.FR), N = Nb.D, EN = N.mean, VN = N.var, ENN = VN + EN * EN - EN;
+      const agg = r => { const Ev = EN * VS + r * VS * ENN, Vm = ES * ES * VN, Vy = Ev + Vm, E = EN * ES; return { E, Ev, Vm, Vy, I: Vm / Ev, sd: Math.sqrt(Vy) }; };
+      const a0 = agg(0), rc = V.nOpt('rc'), a1 = rc ? agg(rc) : null;
+      R.tile('𝔼(y)', a0.E, { main: true }).tile('σ²(y)', a0.Vy, { main: true }).tile('Índice de mixtura de y', a0.I, { main: true });
+      if (a1) R.tile(`σ²(y) con r = ${f(rc)}`, a1.Vy, { main: true }).tile(`Índice con r = ${f(rc)}`, a1.I);
+      R.key('Ey', a0.E).key('Evy', a0.Ev).key('Vmy', a0.Vm).key('Vy', a0.Vy).key('Iy', a0.I);
+      if (a1) R.key('Evy_r', a1.Ev).key('Vy_r', a1.Vy).key('Iy_r', a1.I);
+      const cols = ['Concepto', 'Independientes', ...(a1 ? [`Correlación r = ${f(rc)}`] : [])];
+      const rowv = (l, k) => [l, a0[k], ...(a1 ? [a1[k]] : [])];
+      R.table('Coste agregado y = S₁ + … + S<sub>N</sub>', cols, [rowv('Esperanza 𝔼(y)', 'E'), rowv('Media de varianzas 𝔼(σ²(y|N))', 'Ev'), rowv('Varianza de medias σ²(𝔼(y|N))', 'Vm'), rowv('Varianza σ²(y)', 'Vy'), rowv('Índice de mixtura', 'I'), rowv('Desviación σ(y)', 'sd'),
+        ['Ratio media/desviación', a0.E / a0.sd, ...(a1 ? [a1.E / a1.sd] : [])], ['Ratio desviación/media', a0.sd / a0.E, ...(a1 ? [a1.sd / a1.E] : [])]]);
+      R.step('Frecuencia', Nb.ex + eq(`𝔼(N) = ${vv(EN)}, σ²(N) = ${vv(VN)}, 𝔼(N(N − 1)) = σ²(N) + 𝔼(N)² − 𝔼(N) = ${vv(ENN)}`));
+      R.step('Coste agregado (ec. 26)', eq(`𝔼(y) = 𝔼(N)𝔼(S) = ${f(EN)} × ${f(ES)} = ${vv(a0.E)}`) + eq(`Media de varianzas = 𝔼(N)σ²(S) = ${f(EN)} × ${f(VS)} = ${vv(a0.Ev)}`) +
+        eq(`Varianza de medias = 𝔼(S)²σ²(N) = ${f(ES)}² × ${f(VN)} = ${vv(a0.Vm)}`) + eq(`σ²(y) = ${vv(a0.Vy)}; &nbsp; I = ${vv(a0.I)}`) +
+        (a1 ? eq(`Con correlación r = ${f(rc)}: media de varianzas = ${f(EN)} × ${f(VS)} + ${f(rc)} × ${f(VS)} × ${f(ENN)} = ${vv(a1.Ev)}; σ²(y) = ${vv(a1.Vy)}; I = ${vv(a1.I)}`) : ''));
+      R.uses(Nb.fam === 'poisson' ? 'pois' : Nb.fam === 'binneg' ? 'nb24' : null, 'comp26');
+      R.ans('Coste agregado.', `${Nb.ex} Condicionando al número de siniestros, 𝔼(y) = 𝔼(N)𝔼(S) = ${f(EN)} × ${f(ES)} = ${vv(a0.E)}; la media de las varianzas es 𝔼(N)σ²(S) = ${vv(a0.Ev)} y la varianza de las medias 𝔼(S)²σ²(N) = ${vv(a0.Vm)}. Por tanto σ²(y) = ${vv(a0.Vy)}, σ(y) = ${vv(a0.sd)} y el índice de mixtura es ${f(a0.Vm)}/${f(a0.Ev)} = ${vv(a0.I)}.`);
+      if (a1) {
+        R.uses('corrS');
+        R.ans('Severidades correlacionadas.', `Si dos severidades del mismo año tienen correlación ${f(rc)}, σ²(S₁ + … + S<sub>n</sub>) = nσ²(S) + n(n − 1)·${f(rc)}·σ²(S), y la media de las varianzas pasa a ser ${f(EN)} × ${f(VS)} + ${f(rc)} × ${f(VS)} × 𝔼(N(N − 1)) = ${vv(a1.Ev)} (𝔼(N(N − 1)) = ${f(ENN)}). La varianza de las medias no cambia, así que σ²(y) = ${vv(a1.Vy)}, σ(y) = ${vv(a1.sd)} y el índice de mixtura baja a ${vv(a1.I)}: la correlación aumenta el riesgo.`);
+      }
+      return R;
+    },
+    examples: [{
+      id: 'oct20-mix', label: 'Clase 20 oct. 2026 · severidad leve/grave, N ∈ {0, 1, 2}, correlación 0,2',
+      values: { sm: 'tipos', sev: [{ nom: 'Leve', p: '0,99', E: '10', sd: '100' }, { nom: 'Grave', p: '0,01', E: '1000', sd: '1.000.000' }], N_fam: 'tabla', N_tx: '0; 1; 2', N_tp: '0,7; 0,2; 0,1', rc: '0,2' },
+      expect: [{ k: 'ES', l: '𝔼(S)', v: 19.9, src: 'hoja Oct_20_II' }, { k: 'VmS', l: 'Varianza de medias de S', v: 9702.99 }, { k: 'IS', l: 'Índice de mixtura de S', v: 9702.99 / 10000009900 }, { k: 'Ey', l: '𝔼(y)', v: 7.96 }, { k: 'Vy', l: 'σ²(y)', v: 0.4 * (9702.99 + 10000009900) + 19.9 * 19.9 * 0.44 }, { k: 'Vy_r', l: 'σ²(y) con r = 0,2', v: (9702.99 + 10000009900) * (0.2 + 0.1 * 2.4) + 19.9 * 19.9 * 0.44 }],
+      note: 'Hoja de clase (no es de examen). En la hoja la desviación del siniestro grave es 1.000.000 (así se usa en «Media Varianzas»); si en un enunciado te dan la varianza, escribe su raíz.'
+    }]
+  });
+
   /* ═════════ T3 · Mixtura paramétrica ═════════ */
   const COND = {
     poisson: { lab: 'Poisson(Λ)', c: () => [1, 0], d: () => [0, 1, 0], txt: '𝔼(y|Λ) = Λ, σ²(y|Λ) = Λ' },
@@ -3323,6 +3400,7 @@ const P = (function () {
           ...P.measFields('m_', { type: 'SW', a: '1' }),
           { id: 'R0', type: 'num', label: 'Reservas iniciales R₀', def: '0' },
           { id: 'r01o', type: 'num', label: 'ρ(0,1) a usar (opcional)', def: '', ph: 'exacto', help: 'Si el examen da o simula ρ(0,1) (p. ej. SW₁ = 1,603621301), escríbelo para reproducir su solución' },
+          { id: 'wE', type: 'num', label: 'Reparto mixto: peso del coste esperado (opcional)', def: '', ph: 'p. ej. 0,75', help: 'Πᵢ = w·Π·𝔼(yᵢ)/𝔼(y) + (1 − w)·Π·ρ(−yᵢ)/Σρ(−yᵢ)' },
           { id: 'k1', type: 'num', label: 'k₁ fijado (opcional)', def: '', ph: 'p. ej. 10 %', help: 'Calcula el k₂ que le corresponde' }
         ]
       },
@@ -3404,9 +3482,15 @@ const P = (function () {
           cs.map(x => [x.lab, x.k1, x.k2, ...(c ? [x.k2p] : []), (1 + x.k1) * m + x.k2 * rho]));
         if (!rows || !c) return;
         const pr = (x, r) => (1 + x.k1) * r.E + x.k2p * r.r;
-        R.table(`${title}: prima de cada póliza`, ['Pólizas nᵢ', '𝔼(yᵢ)', 'ρ(−yᵢ)', ...cs.map(x => `(${f(x.k1, 6)}; ${f(x.k2p, 6)})`), 'Proporcional al riesgo (86)'],
-          [...rows.map(r => [f(r.n), r.E, r.r, ...cs.map(x => pr(x, r)), Pp * r.r / sumR]),
-            ['<b>Σ nᵢ·Πᵢ</b>', '', '', ...cs.map(x => rows.reduce((a, r) => a + r.n * pr(x, r), 0)), Pp]]);
+        const wE = V.nOpt('wE'), mix = r => wE * Pp * r.E / m + (1 - wE) * Pp * r.r / sumR;
+        R.table(`${title}: prima de cada póliza`, ['Pólizas nᵢ', '𝔼(yᵢ)', 'ρ(−yᵢ)', ...cs.map(x => `(${f(x.k1, 6)}; ${f(x.k2p, 6)})`), 'Proporcional al riesgo (86)', ...(wE !== null ? [`Mixto ${f(wE)}·coste + ${f(1 - wE)}·riesgo`] : [])],
+          [...rows.map(r => [f(r.n), r.E, r.r, ...cs.map(x => pr(x, r)), Pp * r.r / sumR, ...(wE !== null ? [mix(r)] : [])]),
+            ['<b>Σ nᵢ·Πᵢ</b>', '', '', ...cs.map(x => rows.reduce((a, r) => a + r.n * pr(x, r), 0)), Pp, ...(wE !== null ? [Pp] : [])]]);
+        if (wE !== null) {
+          rows.forEach((r, i) => R.key(`${tag}mix_${i + 1}`, mix(r)));
+          R.ans(`${title}: reparto mixto.`, `Repartiendo la prima ${f(Pp)} un ${pct(wE)} según el coste esperado (k₂ = 0) y un ${pct(1 - wE)} según el riesgo (k₁ = −1):` +
+            eq(`Πᵢ = ${f(wE)}·Π·𝔼(yᵢ)/𝔼(y) + ${f(1 - wE)}·Π·ρ(−yᵢ)/Σρ(−yᵢ) ⇒ ${rows.map((r, i) => `Π${i + 1} = ${f(wE)} × ${f(Pp * r.E / m)} + ${f(1 - wE)} × ${f(Pp * r.r / sumR)} = ${vv(mix(r))}`).join('<br>')}`) + `La suma Σ nᵢΠᵢ vuelve a ser ${f(Pp)}.`);
+        }
         cs.forEach((x, k) => rows.forEach((r, i) => R.key(`${tag}c${k + 1}_${i + 1}`, pr(x, r))));
         R.ans(`${title}: primas por póliza.`, `Con k₂ por póliza = k₂ de la cartera × ${f(c)}, la prima de cada tipo es Πᵢ = (1 + k₁)𝔼(yᵢ) + k₂ρ(−yᵢ):` +
           eq(cs.map(x => `${x.lab}: (k₁; k₂) = (${f(x.k1)}; ${f(x.k2p)}) ⇒ ${rows.map((r, i) => `Π${i + 1} = ${f(pr(x, r))}`).join(', ')}; Σ nᵢΠᵢ = ${f(rows.reduce((a, r) => a + r.n * pr(x, r), 0))}`).join('<br>')) +
@@ -3431,7 +3515,10 @@ const P = (function () {
         const yc = V.s('reT') === 'r' ? T.plComplement(tr) : tr, yr = T.plComplement(yc);
         const k1r = V.n('k1r'), k2r = V.n('k2r');
         const C = T.transformDist(D, yc), Rr = T.transformDist(D, yr);
-        const Eyc = C.mean, rhoc = T.risk(C, sp), PR = (1 + k1r) * Eyc + k2r * rhoc, rhor = T.risk(Rr, sp);
+        // Con medida comonótona aditiva y tratado comonótono: ρ(−y_c) = a₀ρ(−y) + Σ aᵢρ(−(y − Uᵢ)⁺), usando el ρ(0,1) indicado para la parte proporcional
+        const addv = T.comonotoneAdditive(sp) && T.plSlopes(yc).every(x => x.slope >= -1e-12 && x.slope <= 1 + 1e-12);
+        const rhoc = addv ? yc.a0 * rho + yc.layers.reduce((a, l) => a + l.a * T.layerRisk(D, sp, l.U), 0) : T.risk(C, sp);
+        const Eyc = C.mean, PR = (1 + k1r) * Eyc + k2r * rhoc, rhor = addv ? rho - rhoc : T.risk(Rr, sp);
         const shift = (PR - rhoc) / rho, Pt = P0 + PR - rhoc, e1 = ext(Pt);
         const conv = PR < rhoc;
         R.tile('Precio del reaseguro Π<sub>R</sub>', PR).tile('Prima de la cartera con reaseguro', Pt, { main: true }).tile('k₁ máx. con reaseguro', e1.k1).tile('k₂ máx. con reaseguro', e1.k2);
@@ -3491,12 +3578,27 @@ const P = (function () {
           eq(`Π* = Π + ρ(R)/(1 + r₀) = ${f(P0)} ${first.rr < 0 ? '−' : '+'} ${f(Math.abs(first.rr))}/${f(1 + r0)} = ${vv(first.Pn)}`) +
           (V.b('iter') ? `Repitiendo el cálculo con la nueva prima (${it.length} iteraciones) el riesgo global se anula: Π* = ${vv(last.Pn)}, ${wtxt(last)}.` : '') +
           eq(`Nuevos recargos: k₂ = 0 ⇒ k₁ = ${vv(e2.k1)}; &nbsp; k₁ = 0 ⇒ k₂ = ${vv(e2.k2)}${c ? ` (por póliza ${f(e2.k2 * c)})` : ''}`));
+        const Ai0 = mv(Ai, ex), sA = Ai0.reduce((a, b) => a + b, 0);
+        R.table('Estrategia de inversión con la prima cobrada', ['Destino', 'Peso', 'Importe = Π·peso'],
+          [...first.x.map((v, i) => [`Activo ${i + 1}`, v, P0 * v]), ['Activo sin riesgo', first.x0, P0 * first.x0], ['Total', 1, P0]]);
         R.uses('inv80');
         R.ans('Inversión de las primas.', `Con las notaciones del curso, B = (1/ρ<sub>(0,1)</sub>)A<sup>−1</sup>𝔼(r − r₀) = (${B.map(v => f(v)).join('; ')}), M = ${f(M)} y x = Mσ(y)B/Π, de donde la estrategia óptima de inversión es ${wtxt(first)}. El riesgo global actuarial/financiero es ρ(R) = ${vv(first.rr)}, por lo que la prima ${first.rr < 0 ? 'puede reducirse' : 'debe aumentar'} hasta Π* = ${f(P0)} ${first.rr < 0 ? '−' : '+'} ${f(Math.abs(first.rr))}${r0 ? '/' + f(1 + r0) : ''} = ${vv(first.Pn)}${V.b('iter') ? ` (iterando hasta riesgo nulo: ${vv(last.Pn)})` : ''}. Los recargos saldrán de (1 + k₁)${f(m)} + ${f(rho)}k₂ = ${f(Pf)}: k₂ = 0 ⇒ k₁ = ${vv(e2.k1)}; k₁ = 0 ⇒ k₂ = ${vv(e2.k2)}${c ? `; por póliza, k₂ = ${f(e2.k2)} × ${f(c)} = ${vv(e2.k2 * c)}` : ''}.`);
+        R.ans('Cartera de mercado e importes.', `La parte arriesgada se invierte en la cartera de mercado, proporcional a A<sup>−1</sup>𝔼(r − r₀) = (${Ai0.map(v => f(v)).join('; ')}), es decir, (${Ai0.map(v => f(v / sA)).join('; ')}). Con la prima cobrada Π = ${f(P0)} se invierte ${first.x.map((v, i) => `${f(P0 * v)} en el activo ${i + 1}`).join(', ')} y ${f(P0 * first.x0)} en el activo sin riesgo.`);
       }
       return R;
     },
     examples: [
+      { id: 'oct20-p', label: 'Clase 20 oct. 2026 · 5.000/2.000/2.000/1.000 pólizas, CVaR 95 %, k₁ = 15 %, reparto 75 % coste / 25 % riesgo', values: { src: 'tabla', cart: [{ n: '5000', E: '5', s: '30', r: '200' }, { n: '2000', E: '8', s: '50', r: '400' }, { n: '2000', E: '10', s: '70', r: '800' }, { n: '1000', E: '20', s: '200', r: '1400' }], m_rho: 'CVaR', m_lvl: '95', R0: '0', r01o: '2,06323586', k1: '0,15', wE: '0,75', reOn: false, invOn: false },
+        expect: [{ k: 'rho', l: 'Prima de la cartera', v: 96888.25583, src: 'hoja Oct_20_I' }, { k: 'k1max', l: 'Recargo de seguridad', v: 0.1961513065 }, { k: 'k2max', l: 'k₂ (k₁ = 0)', v: 0.1639853633 }, { k: 'k2g', l: 'k₂ con k₁ = 0,15', v: 0.0385831678 }, { k: 'c', l: 'Precio unidad de riesgo ρ/Σρᵢ', v: 0.0201850533 }, { k: 'mix_1', l: 'Prima mixta póliza 1', v: 5.494820064 }, { k: 'mix_4', l: 'Prima mixta póliza 4', v: 25.00703825 }], note: 'Hoja de clase (no es de examen). Usa φ con 2π ≈ 6,28, por eso se pone ρ(0,1) = 2,06323586.' },
+      { id: 'oct20-cp', label: 'Clase 20 oct. 2026 · cuota-parte 30 % cedido, PPVE 10 %', values: { src: 'tabla', cart: [{ n: '5000', E: '5', s: '30', r: '200' }, { n: '2000', E: '8', s: '50', r: '400' }, { n: '2000', E: '10', s: '70', r: '800' }, { n: '1000', E: '20', s: '200', r: '1400' }], m_rho: 'CVaR', m_lvl: '95', R0: '0', r01o: '2,06323586', k1: '0,15', reOn: true, re: '0,3y', reT: 'c', k1r: '0,1', k2r: '0', invOn: false },
+        expect: [{ k: 'PR', l: 'Prima del reaseguro', v: 26730 }, { k: 'primaRe', l: 'Nueva prima', v: 94551.77908 }, { k: 'k1Re', l: 'k₁ (k₂ = 0)', v: 0.1673059146 }, { k: 'k2Re', l: 'k₂ (k₁ = 0)', v: 0.1398701934 }], note: 'Hoja de clase (no es de examen). Usa φ con 2π ≈ 6,28, por eso se pone ρ(0,1) = 2,06323586.' },
+      { id: 'oct20-sl', label: 'Clase 20 oct. 2026 · stop-loss (y − 81.000)⁺, PPVE 10 %', values: { src: 'tabla', cart: [{ n: '5000', E: '5', s: '30', r: '200' }, { n: '2000', E: '8', s: '50', r: '400' }, { n: '2000', E: '10', s: '70', r: '800' }, { n: '1000', E: '20', s: '200', r: '1400' }], m_rho: 'CVaR', m_lvl: '95', R0: '0', r01o: '2,06323586', k1: '0,15', reOn: true, re: '(y − 81.000)+', reT: 'c', k1r: '0,1', k2r: '0', invOn: false },
+        expect: [{ k: 'Eyc', l: '𝔼(y<sub>c</sub>) = s/√6,28', v: 3072.893613 }, { k: 'rhoc', l: 'CVaR cedido', v: 15888.25583 }, { k: 'primaRe', l: 'Nueva prima', v: 84380.18297 }, { k: 'k1Re', l: 'k₁ (k₂ = 0)', v: 0.041730654 }, { k: 'k2Re', l: 'k₂ (k₁ = 0)', v: 0.0348874376 }],
+        note: 'Hoja de clase (no es de examen). Usa φ con 2π ≈ 6,28, por eso se pone ρ(0,1) = 2,06323586. Para que 𝔼(y<sub>c</sub>) salga exactamente como en la hoja (s/√6,28) activa «Usar 2π ≈ 6,28»; con π exacto da s/√(2π) = 3.072,12.' },
+      { id: 'oct20-mx', label: 'Clase 20 oct. 2026 · mixto 0,2y + 0,6(y − 81.000)⁺, PPVE 10 %', values: { src: 'tabla', cart: [{ n: '5000', E: '5', s: '30', r: '200' }, { n: '2000', E: '8', s: '50', r: '400' }, { n: '2000', E: '10', s: '70', r: '800' }, { n: '1000', E: '20', s: '200', r: '1400' }], m_rho: 'CVaR', m_lvl: '95', R0: '0', r01o: '2,06323586', k1: '0,15', reOn: true, re: '0,2y + 0,6(y − 81.000)+', reT: 'c', k1r: '0,1', k2r: '0', invOn: false },
+        expect: [{ k: 'Eyc', l: '𝔼(y<sub>c</sub>)', v: 18043.73617 }, { k: 'rhoc', l: 'Riesgo cedido', v: 28910.60466 }, { k: 'primaRe', l: 'Nueva prima', v: 87825.76095 }, { k: 'k1Re', l: 'k₁ (k₂ = 0)', v: 0.0842686537 }, { k: 'k2Re', l: 'k₂ (k₁ = 0)', v: 0.0704498279 }], note: 'Hoja de clase (no es de examen). Usa φ con 2π ≈ 6,28, por eso se pone ρ(0,1) = 2,06323586. Activa «Usar 2π ≈ 6,28» para la 𝔼 del stop-loss exacta de la hoja.' },
+      { id: 'oct20-inv', label: 'Clase 20 oct. 2026 · mercado financiero: dos activos (2 %, 10 %) y (3 %, 11 %), correlación 0,4', values: { src: 'tabla', cart: [{ n: '5000', E: '5', s: '30', r: '200' }, { n: '2000', E: '8', s: '50', r: '400' }, { n: '2000', E: '10', s: '70', r: '800' }, { n: '1000', E: '20', s: '200', r: '1400' }], m_rho: 'CVaR', m_lvl: '95', R0: '0', r01o: '2,06323586', k1: '0,15', reOn: false, invOn: true, r0: '0', act: [{ mu: '2%', sd: '10%' }, { mu: '3%', sd: '11%' }], corr: '1-2: 0,4' },
+        expect: [{ k: 'x1', l: 'Peso activo I', v: 0.04210895 }, { k: 'x2', l: 'Peso activo II', v: 0.08115544 }, { k: 'rhoR', l: 'Riesgo actuarial-financiero', v: -157.9507536 }, { k: 'primaInv', l: 'Nueva prima', v: 96730.30508 }, { k: 'k1Inv', l: 'k₁ (k₂ = 0)', v: 0.1942012972 }, { k: 'k2Inv', l: 'k₂ (k₁ = 0)', v: 0.162355127 }], note: 'Hoja de clase (no es de examen). Usa φ con 2π ≈ 6,28, por eso se pone ρ(0,1) = 2,06323586. La hoja también da la cartera de mercado (0,3416; 0,6584) y lo que se invierte en cada activo.' },
       { id: 'oct6-cp', label: 'Clase 6 oct. 2026 · cartera 1.000/5.000/10.000, CVaR 95 %, cuota-parte con retención del 60 % (PPVE 1 %)', values: { src: 'tabla', cart: [{ n: '1000', E: '5', s: '10', r: '100' }, { n: '5000', E: '8', s: '12', r: '200' }, { n: '10000', E: '12', s: '25', r: '280' }], m_rho: 'CVaR', m_lvl: '95', R0: '0', r01o: '', k1: '0,005', reOn: true, re: '0,4y', reT: 'c', k1r: '0,01', k2r: '0', invOn: false },
         expect: [{ k: 'rho', l: 'CVaR<sub>95%</sub>(−y) = prima', v: 170484.6444, src: 'hoja Octubre_6' }, { k: 'k1max', l: 'k₁ máx.', v: 0.033240269 }, { k: 'k2max', l: 'k₂ máx.', v: 0.0321708995 }, { k: 'k2g', l: 'k₂ con k₁ = 0,005', v: 0.027331754 }, { k: 'c', l: 'Coeficiente reductor ρ/Σρᵢ', v: 0.0437140114 }, { k: 'PR', l: 'Coste del reaseguro 1,01·0,4·𝔼(y)', v: 66660 }, { k: 'primaRe', l: 'Nueva prima', v: 168950.7866 }, { k: 'k1Re', l: 'k₁ máx. con reaseguro', v: 0.0239441613 }, { k: 'k2Re', l: 'k₂ máx. con reaseguro', v: 0.0231738561 }],
         note: 'Hoja de clase (no es de examen). Reproduce las cuatro combinaciones del profesor: (k₁ máx; 0), (−1; k₂), (0; k₂ máx) y (0,005; k₂), con las primas de cada póliza y su suma.' },
@@ -3732,13 +3834,14 @@ const VIEWS = (function () {
       title: 'Frecuencia × severidad: coste agregado de una póliza', temas: [1, 2, 3, 4, 7],
       when: 'Ej. 2 en Enero y Junio 2026, Junio 2023 y Enero 2015 · Ej. 3 en todas las demás. Sale en las 16 convocatorias.',
       intro: '«La frecuencia es … y la severidad es …». Casi todo sale de <b>Coste agregado</b>, rellenando sólo los campos opcionales que correspondan a lo que preguntan.',
-      tools: ['t3-agregado', 't1-dist', 't2-freq', 't1-suma', 't2-suma'],
+      tools: ['t3-agregado', 't3-momentos', 't1-dist', 't2-freq', 't1-suma', 't2-suma'],
       steps: [
         ['Media y desviación, VaR/CVaR, prima Π = a𝔼 + bρ, riesgo del asegurador, IP(pérdida), IP(y = 0)', 't3-agregado', 'Frecuencia, severidad, medida y a, b.'],
         ['Franquicia, indemnización máxima por siniestro o anual', 't3-agregado', 'Grupo «Franquicia e indemnizaciones máximas».'],
         ['Segunda prima, k mínimo, IP(ganar ≥ ½Π), condicionado a N, tabla de Panjer', 't3-agregado', 'Campos opcionales del grupo «Medida de riesgo y principio de prima».'],
         ['Cartera de n pólizas, n mínimo', 't3-agregado', 'Grupo «Cartera de n pólizas».'],
         ['Prima a priori / a posteriori y % de reducción', 't3-agregado', 'Dos veces; en la segunda, la prima a priori en «Prima de referencia».'],
+        ['Severidad mezcla de tipos (leve/grave), índices de mixtura de S y de y, severidades correlacionadas (sólo momentos)', 't3-momentos', 'Tipos con probabilidad, media y desviación; la frecuencia; la correlación si la hay.'],
         ['Parámetros de la severidad, percentiles, 𝔼((S − d)⁺)', 't1-dist', 'La distribución de la severidad.'],
         ['Distribución de N, Poisson–Gamma → BN, IP(N = x)', 't2-freq', 'La frecuencia.'],
         ['Suma de exponenciales o de normales; suma de frecuencias', 't1-suma', 'Los sumandos.']

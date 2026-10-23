@@ -71,3 +71,8 @@ engine.js (numérica, distribuciones, medidas, FFT/Panjer, MC) · ui.js (formula
   - Parte 2 · Práctico 4 «Regresiones» (T11–13): pendiente.
   - «Consultar por tema» queda plegado al final.
 - Cada página de práctico: temas, en qué ejercicio sale, guía plegable «¿Qué herramienta uso para cada apartado?», botones de herramientas y, al final, los exámenes de ese práctico.
+
+## Hojas de clase 20 oct. 2026 (Oct_20_I y Oct_20_II)
+- Oct_20_I (tema 8, φ con √6,28): cartera 5.000/2.000/2.000/1.000 (𝔼 5/8/10/20, σ 30/50/70/200, riesgo 200/400/800/1.400), CVaR95. Primas por póliza: proporcional al coste (k₂ = 0), al riesgo (k₁ = −1) y **reparto mixto** 0,75·coste + 0,25·riesgo (campo «Reparto mixto» en t8). k₁ = 15 % ⇒ k₂. Reaseguros CP 30 % (PPVE 10 %), SL (y − 81.000)⁺ con 𝔼 = s/√6,28, mixto 0,2y + 0,6(y − 81.000)⁺, y mercado financiero (2 activos, r₀ = 0): pesos, cartera de mercado A⁻¹𝔼(r)/Σ, importes Π·xᵢ, riesgo y nueva prima. Ejemplos oct20-* en t8 (cuadran al céntimo; el SL exacto requiere «2π ≈ 6,28»).
+- t8: con ρ(0,1) indicado y medida comonótona aditiva, ρ(−y_c) = a₀ρ(−y) + Σaᵢρ(−(y−Uᵢ)⁺) usando ese ρ(0,1) en la parte proporcional (así E24 y E25 cuadran exactos).
+- Oct_20_II (mixturas, tema 3): severidad mezcla leve/grave (prob., media, desviación) → 𝔼, varianza de medias, media de varianzas, índice; coste agregado con N ∈ {0,1,2}: 𝔼(N)σ²(S) y 𝔼(S)²σ²(N); con severidades correlacionadas r: + rσ²(S)𝔼(N(N−1)). Herramienta nueva t3-momentos (Práctico 2), ejemplo oct20-mix.

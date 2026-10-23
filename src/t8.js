@@ -59,6 +59,7 @@
           ...P.measFields('m_', { type: 'SW', a: '1' }),
           { id: 'R0', type: 'num', label: 'Reservas iniciales R₀', def: '0' },
           { id: 'r01o', type: 'num', label: 'ρ(0,1) a usar (opcional)', def: '', ph: 'exacto', help: 'Si el examen da o simula ρ(0,1) (p. ej. SW₁ = 1,603621301), escríbelo para reproducir su solución' },
+          { id: 'wE', type: 'num', label: 'Reparto mixto: peso del coste esperado (opcional)', def: '', ph: 'p. ej. 0,75', help: 'Πᵢ = w·Π·𝔼(yᵢ)/𝔼(y) + (1 − w)·Π·ρ(−yᵢ)/Σρ(−yᵢ)' },
           { id: 'k1', type: 'num', label: 'k₁ fijado (opcional)', def: '', ph: 'p. ej. 10 %', help: 'Calcula el k₂ que le corresponde' }
         ]
       },
@@ -140,9 +141,15 @@
           cs.map(x => [x.lab, x.k1, x.k2, ...(c ? [x.k2p] : []), (1 + x.k1) * m + x.k2 * rho]));
         if (!rows || !c) return;
         const pr = (x, r) => (1 + x.k1) * r.E + x.k2p * r.r;
-        R.table(`${title}: prima de cada póliza`, ['Pólizas nᵢ', '𝔼(yᵢ)', 'ρ(−yᵢ)', ...cs.map(x => `(${f(x.k1, 6)}; ${f(x.k2p, 6)})`), 'Proporcional al riesgo (86)'],
-          [...rows.map(r => [f(r.n), r.E, r.r, ...cs.map(x => pr(x, r)), Pp * r.r / sumR]),
-            ['<b>Σ nᵢ·Πᵢ</b>', '', '', ...cs.map(x => rows.reduce((a, r) => a + r.n * pr(x, r), 0)), Pp]]);
+        const wE = V.nOpt('wE'), mix = r => wE * Pp * r.E / m + (1 - wE) * Pp * r.r / sumR;
+        R.table(`${title}: prima de cada póliza`, ['Pólizas nᵢ', '𝔼(yᵢ)', 'ρ(−yᵢ)', ...cs.map(x => `(${f(x.k1, 6)}; ${f(x.k2p, 6)})`), 'Proporcional al riesgo (86)', ...(wE !== null ? [`Mixto ${f(wE)}·coste + ${f(1 - wE)}·riesgo`] : [])],
+          [...rows.map(r => [f(r.n), r.E, r.r, ...cs.map(x => pr(x, r)), Pp * r.r / sumR, ...(wE !== null ? [mix(r)] : [])]),
+            ['<b>Σ nᵢ·Πᵢ</b>', '', '', ...cs.map(x => rows.reduce((a, r) => a + r.n * pr(x, r), 0)), Pp, ...(wE !== null ? [Pp] : [])]]);
+        if (wE !== null) {
+          rows.forEach((r, i) => R.key(`${tag}mix_${i + 1}`, mix(r)));
+          R.ans(`${title}: reparto mixto.`, `Repartiendo la prima ${f(Pp)} un ${pct(wE)} según el coste esperado (k₂ = 0) y un ${pct(1 - wE)} según el riesgo (k₁ = −1):` +
+            eq(`Πᵢ = ${f(wE)}·Π·𝔼(yᵢ)/𝔼(y) + ${f(1 - wE)}·Π·ρ(−yᵢ)/Σρ(−yᵢ) ⇒ ${rows.map((r, i) => `Π${i + 1} = ${f(wE)} × ${f(Pp * r.E / m)} + ${f(1 - wE)} × ${f(Pp * r.r / sumR)} = ${vv(mix(r))}`).join('<br>')}`) + `La suma Σ nᵢΠᵢ vuelve a ser ${f(Pp)}.`);
+        }
         cs.forEach((x, k) => rows.forEach((r, i) => R.key(`${tag}c${k + 1}_${i + 1}`, pr(x, r))));
         R.ans(`${title}: primas por póliza.`, `Con k₂ por póliza = k₂ de la cartera × ${f(c)}, la prima de cada tipo es Πᵢ = (1 + k₁)𝔼(yᵢ) + k₂ρ(−yᵢ):` +
           eq(cs.map(x => `${x.lab}: (k₁; k₂) = (${f(x.k1)}; ${f(x.k2p)}) ⇒ ${rows.map((r, i) => `Π${i + 1} = ${f(pr(x, r))}`).join(', ')}; Σ nᵢΠᵢ = ${f(rows.reduce((a, r) => a + r.n * pr(x, r), 0))}`).join('<br>')) +
@@ -167,7 +174,10 @@
         const yc = V.s('reT') === 'r' ? T.plComplement(tr) : tr, yr = T.plComplement(yc);
         const k1r = V.n('k1r'), k2r = V.n('k2r');
         const C = T.transformDist(D, yc), Rr = T.transformDist(D, yr);
-        const Eyc = C.mean, rhoc = T.risk(C, sp), PR = (1 + k1r) * Eyc + k2r * rhoc, rhor = T.risk(Rr, sp);
+        // Con medida comonótona aditiva y tratado comonótono: ρ(−y_c) = a₀ρ(−y) + Σ aᵢρ(−(y − Uᵢ)⁺), usando el ρ(0,1) indicado para la parte proporcional
+        const addv = T.comonotoneAdditive(sp) && T.plSlopes(yc).every(x => x.slope >= -1e-12 && x.slope <= 1 + 1e-12);
+        const rhoc = addv ? yc.a0 * rho + yc.layers.reduce((a, l) => a + l.a * T.layerRisk(D, sp, l.U), 0) : T.risk(C, sp);
+        const Eyc = C.mean, PR = (1 + k1r) * Eyc + k2r * rhoc, rhor = addv ? rho - rhoc : T.risk(Rr, sp);
         const shift = (PR - rhoc) / rho, Pt = P0 + PR - rhoc, e1 = ext(Pt);
         const conv = PR < rhoc;
         R.tile('Precio del reaseguro Π<sub>R</sub>', PR).tile('Prima de la cartera con reaseguro', Pt, { main: true }).tile('k₁ máx. con reaseguro', e1.k1).tile('k₂ máx. con reaseguro', e1.k2);
@@ -227,12 +237,27 @@
           eq(`Π* = Π + ρ(R)/(1 + r₀) = ${f(P0)} ${first.rr < 0 ? '−' : '+'} ${f(Math.abs(first.rr))}/${f(1 + r0)} = ${vv(first.Pn)}`) +
           (V.b('iter') ? `Repitiendo el cálculo con la nueva prima (${it.length} iteraciones) el riesgo global se anula: Π* = ${vv(last.Pn)}, ${wtxt(last)}.` : '') +
           eq(`Nuevos recargos: k₂ = 0 ⇒ k₁ = ${vv(e2.k1)}; &nbsp; k₁ = 0 ⇒ k₂ = ${vv(e2.k2)}${c ? ` (por póliza ${f(e2.k2 * c)})` : ''}`));
+        const Ai0 = mv(Ai, ex), sA = Ai0.reduce((a, b) => a + b, 0);
+        R.table('Estrategia de inversión con la prima cobrada', ['Destino', 'Peso', 'Importe = Π·peso'],
+          [...first.x.map((v, i) => [`Activo ${i + 1}`, v, P0 * v]), ['Activo sin riesgo', first.x0, P0 * first.x0], ['Total', 1, P0]]);
         R.uses('inv80');
         R.ans('Inversión de las primas.', `Con las notaciones del curso, B = (1/ρ<sub>(0,1)</sub>)A<sup>−1</sup>𝔼(r − r₀) = (${B.map(v => f(v)).join('; ')}), M = ${f(M)} y x = Mσ(y)B/Π, de donde la estrategia óptima de inversión es ${wtxt(first)}. El riesgo global actuarial/financiero es ρ(R) = ${vv(first.rr)}, por lo que la prima ${first.rr < 0 ? 'puede reducirse' : 'debe aumentar'} hasta Π* = ${f(P0)} ${first.rr < 0 ? '−' : '+'} ${f(Math.abs(first.rr))}${r0 ? '/' + f(1 + r0) : ''} = ${vv(first.Pn)}${V.b('iter') ? ` (iterando hasta riesgo nulo: ${vv(last.Pn)})` : ''}. Los recargos saldrán de (1 + k₁)${f(m)} + ${f(rho)}k₂ = ${f(Pf)}: k₂ = 0 ⇒ k₁ = ${vv(e2.k1)}; k₁ = 0 ⇒ k₂ = ${vv(e2.k2)}${c ? `; por póliza, k₂ = ${f(e2.k2)} × ${f(c)} = ${vv(e2.k2 * c)}` : ''}.`);
+        R.ans('Cartera de mercado e importes.', `La parte arriesgada se invierte en la cartera de mercado, proporcional a A<sup>−1</sup>𝔼(r − r₀) = (${Ai0.map(v => f(v)).join('; ')}), es decir, (${Ai0.map(v => f(v / sA)).join('; ')}). Con la prima cobrada Π = ${f(P0)} se invierte ${first.x.map((v, i) => `${f(P0 * v)} en el activo ${i + 1}`).join(', ')} y ${f(P0 * first.x0)} en el activo sin riesgo.`);
       }
       return R;
     },
     examples: [
+      { id: 'oct20-p', label: 'Clase 20 oct. 2026 · 5.000/2.000/2.000/1.000 pólizas, CVaR 95 %, k₁ = 15 %, reparto 75 % coste / 25 % riesgo', values: { src: 'tabla', cart: [{ n: '5000', E: '5', s: '30', r: '200' }, { n: '2000', E: '8', s: '50', r: '400' }, { n: '2000', E: '10', s: '70', r: '800' }, { n: '1000', E: '20', s: '200', r: '1400' }], m_rho: 'CVaR', m_lvl: '95', R0: '0', r01o: '2,06323586', k1: '0,15', wE: '0,75', reOn: false, invOn: false },
+        expect: [{ k: 'rho', l: 'Prima de la cartera', v: 96888.25583, src: 'hoja Oct_20_I' }, { k: 'k1max', l: 'Recargo de seguridad', v: 0.1961513065 }, { k: 'k2max', l: 'k₂ (k₁ = 0)', v: 0.1639853633 }, { k: 'k2g', l: 'k₂ con k₁ = 0,15', v: 0.0385831678 }, { k: 'c', l: 'Precio unidad de riesgo ρ/Σρᵢ', v: 0.0201850533 }, { k: 'mix_1', l: 'Prima mixta póliza 1', v: 5.494820064 }, { k: 'mix_4', l: 'Prima mixta póliza 4', v: 25.00703825 }], note: 'Hoja de clase (no es de examen). Usa φ con 2π ≈ 6,28, por eso se pone ρ(0,1) = 2,06323586.' },
+      { id: 'oct20-cp', label: 'Clase 20 oct. 2026 · cuota-parte 30 % cedido, PPVE 10 %', values: { src: 'tabla', cart: [{ n: '5000', E: '5', s: '30', r: '200' }, { n: '2000', E: '8', s: '50', r: '400' }, { n: '2000', E: '10', s: '70', r: '800' }, { n: '1000', E: '20', s: '200', r: '1400' }], m_rho: 'CVaR', m_lvl: '95', R0: '0', r01o: '2,06323586', k1: '0,15', reOn: true, re: '0,3y', reT: 'c', k1r: '0,1', k2r: '0', invOn: false },
+        expect: [{ k: 'PR', l: 'Prima del reaseguro', v: 26730 }, { k: 'primaRe', l: 'Nueva prima', v: 94551.77908 }, { k: 'k1Re', l: 'k₁ (k₂ = 0)', v: 0.1673059146 }, { k: 'k2Re', l: 'k₂ (k₁ = 0)', v: 0.1398701934 }], note: 'Hoja de clase (no es de examen). Usa φ con 2π ≈ 6,28, por eso se pone ρ(0,1) = 2,06323586.' },
+      { id: 'oct20-sl', label: 'Clase 20 oct. 2026 · stop-loss (y − 81.000)⁺, PPVE 10 %', values: { src: 'tabla', cart: [{ n: '5000', E: '5', s: '30', r: '200' }, { n: '2000', E: '8', s: '50', r: '400' }, { n: '2000', E: '10', s: '70', r: '800' }, { n: '1000', E: '20', s: '200', r: '1400' }], m_rho: 'CVaR', m_lvl: '95', R0: '0', r01o: '2,06323586', k1: '0,15', reOn: true, re: '(y − 81.000)+', reT: 'c', k1r: '0,1', k2r: '0', invOn: false },
+        expect: [{ k: 'Eyc', l: '𝔼(y<sub>c</sub>) = s/√6,28', v: 3072.893613 }, { k: 'rhoc', l: 'CVaR cedido', v: 15888.25583 }, { k: 'primaRe', l: 'Nueva prima', v: 84380.18297 }, { k: 'k1Re', l: 'k₁ (k₂ = 0)', v: 0.041730654 }, { k: 'k2Re', l: 'k₂ (k₁ = 0)', v: 0.0348874376 }],
+        note: 'Hoja de clase (no es de examen). Usa φ con 2π ≈ 6,28, por eso se pone ρ(0,1) = 2,06323586. Para que 𝔼(y<sub>c</sub>) salga exactamente como en la hoja (s/√6,28) activa «Usar 2π ≈ 6,28»; con π exacto da s/√(2π) = 3.072,12.' },
+      { id: 'oct20-mx', label: 'Clase 20 oct. 2026 · mixto 0,2y + 0,6(y − 81.000)⁺, PPVE 10 %', values: { src: 'tabla', cart: [{ n: '5000', E: '5', s: '30', r: '200' }, { n: '2000', E: '8', s: '50', r: '400' }, { n: '2000', E: '10', s: '70', r: '800' }, { n: '1000', E: '20', s: '200', r: '1400' }], m_rho: 'CVaR', m_lvl: '95', R0: '0', r01o: '2,06323586', k1: '0,15', reOn: true, re: '0,2y + 0,6(y − 81.000)+', reT: 'c', k1r: '0,1', k2r: '0', invOn: false },
+        expect: [{ k: 'Eyc', l: '𝔼(y<sub>c</sub>)', v: 18043.73617 }, { k: 'rhoc', l: 'Riesgo cedido', v: 28910.60466 }, { k: 'primaRe', l: 'Nueva prima', v: 87825.76095 }, { k: 'k1Re', l: 'k₁ (k₂ = 0)', v: 0.0842686537 }, { k: 'k2Re', l: 'k₂ (k₁ = 0)', v: 0.0704498279 }], note: 'Hoja de clase (no es de examen). Usa φ con 2π ≈ 6,28, por eso se pone ρ(0,1) = 2,06323586. Activa «Usar 2π ≈ 6,28» para la 𝔼 del stop-loss exacta de la hoja.' },
+      { id: 'oct20-inv', label: 'Clase 20 oct. 2026 · mercado financiero: dos activos (2 %, 10 %) y (3 %, 11 %), correlación 0,4', values: { src: 'tabla', cart: [{ n: '5000', E: '5', s: '30', r: '200' }, { n: '2000', E: '8', s: '50', r: '400' }, { n: '2000', E: '10', s: '70', r: '800' }, { n: '1000', E: '20', s: '200', r: '1400' }], m_rho: 'CVaR', m_lvl: '95', R0: '0', r01o: '2,06323586', k1: '0,15', reOn: false, invOn: true, r0: '0', act: [{ mu: '2%', sd: '10%' }, { mu: '3%', sd: '11%' }], corr: '1-2: 0,4' },
+        expect: [{ k: 'x1', l: 'Peso activo I', v: 0.04210895 }, { k: 'x2', l: 'Peso activo II', v: 0.08115544 }, { k: 'rhoR', l: 'Riesgo actuarial-financiero', v: -157.9507536 }, { k: 'primaInv', l: 'Nueva prima', v: 96730.30508 }, { k: 'k1Inv', l: 'k₁ (k₂ = 0)', v: 0.1942012972 }, { k: 'k2Inv', l: 'k₂ (k₁ = 0)', v: 0.162355127 }], note: 'Hoja de clase (no es de examen). Usa φ con 2π ≈ 6,28, por eso se pone ρ(0,1) = 2,06323586. La hoja también da la cartera de mercado (0,3416; 0,6584) y lo que se invierte en cada activo.' },
       { id: 'oct6-cp', label: 'Clase 6 oct. 2026 · cartera 1.000/5.000/10.000, CVaR 95 %, cuota-parte con retención del 60 % (PPVE 1 %)', values: { src: 'tabla', cart: [{ n: '1000', E: '5', s: '10', r: '100' }, { n: '5000', E: '8', s: '12', r: '200' }, { n: '10000', E: '12', s: '25', r: '280' }], m_rho: 'CVaR', m_lvl: '95', R0: '0', r01o: '', k1: '0,005', reOn: true, re: '0,4y', reT: 'c', k1r: '0,01', k2r: '0', invOn: false },
         expect: [{ k: 'rho', l: 'CVaR<sub>95%</sub>(−y) = prima', v: 170484.6444, src: 'hoja Octubre_6' }, { k: 'k1max', l: 'k₁ máx.', v: 0.033240269 }, { k: 'k2max', l: 'k₂ máx.', v: 0.0321708995 }, { k: 'k2g', l: 'k₂ con k₁ = 0,005', v: 0.027331754 }, { k: 'c', l: 'Coeficiente reductor ρ/Σρᵢ', v: 0.0437140114 }, { k: 'PR', l: 'Coste del reaseguro 1,01·0,4·𝔼(y)', v: 66660 }, { k: 'primaRe', l: 'Nueva prima', v: 168950.7866 }, { k: 'k1Re', l: 'k₁ máx. con reaseguro', v: 0.0239441613 }, { k: 'k2Re', l: 'k₂ máx. con reaseguro', v: 0.0231738561 }],
         note: 'Hoja de clase (no es de examen). Reproduce las cuatro combinaciones del profesor: (k₁ máx; 0), (−1; k₂), (0; k₂ máx) y (0,005; k₂), con las primas de cada póliza y su suma.' },
