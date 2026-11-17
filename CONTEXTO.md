@@ -93,3 +93,10 @@ engine.js (numérica, distribuciones, medidas, FFT/Panjer, MC) · ui.js (formula
   - Reaseguradora con su propia medida (p. ej. 1,01𝔼 + 0,01VaR95) en Recargos y Reaseguro.
   - Motor: la rejilla de la composición llega hasta S.qs(1e−10) (colas pesadas: la media de BN + log-normal(1; 3) ya sale 1).
 - Errata del ejercicio: g) y j) usan ρ(0,1) = 1,6449 (VaR95) aunque piden CVaR95. Ejemplos nov10-* en Coste agregado y en Recargos (g, i, j al céntimo con ese ρ(0,1)).
+
+## Tema 10 implementado (Práctico 3) — nov. 2026
+- Herramienta t10-cred (src/t10.js), modos: Gamma–Poisson (α*, β*, z = hβ/(1 + hβ), %, «qué observación da reducción», años sin siniestros para un descuento, fórmula general con letras; prima a priori/posteriori con severidad y medida, frecuencia BN predictiva o Poisson con la media), Beta (una fila n, u, v por probabilidad; coherencia u/(u + v) = IP(N = n); «u automático»; sin distribución de N si sólo IP(N = 0); resto escalado por α; beta única para IP(N ≤ k) y bonus-malus que sólo distingue N ≤ k; prima con la tabla a posteriori), Bühlmann por momentos (o con I) y credibilidad clásica (z = (m/s)θ√h/Φ⁻¹((1 + β)/2) ≤ 1).
+- Bühlmann compartido (P.buhlmann) en Mixtura de tipos (con Bayes paso a paso y párrafo «por qué difieren Bayes y Bühlmann») y en Mixtura con parámetro aleatorio (h, media, descuento objetivo; usa la σ(y) simulada si se da).
+- Exámenes enlazados: J26-3, E26-2a/b/c, J25-4c, E25-3a/b/c, J24-4, E24-4, E23-4b/c, E22-4b, E20-4a-b/4c, E18-4a/b, E17-4b, E16-4a/b, E15-4, E14-4a/b; clases 4 nov. (Poisson–Gamma + CVaR), Calculos/Ejemplo (betas por n), Ejemplo_Bulhmann, Bluhmann_Ejemplo, Nov_10_III.
+- Erratas: E26-2c (Bühlmann da 1,3846 y −30,77 %, no 1,0769); E26-2b (prima con 𝔼(N)); E25-3b compone Poisson con la media (no la BN); fórmula de v en Ejemplo d).
+- test/t10.js: 10 casos inventados contra cálculo independiente (todos OK).

@@ -68,6 +68,11 @@ const UI = (function () {
     k88: 'Por póliza: k₁ igual, k₂<sup>(p)</sup> = k₂·ρ(−y)/Σρ(−yᵢ) (ec. 88)',
     inv80: 'Inversión: B = A<sup>−1</sup>𝔼(r − r₀)/ρ<sub>(0,1)</sub>, M = 1/√(1 − BᵗAB), x = Mσ(y)B/Π, Π* = Π + ρ(R)/(1 + r₀) (ec. 79–83)',
     corrS: 'Severidades correlacionadas (correlación r): σ²(y|N = n) = nσ²(S) + n(n − 1)rσ²(S) ⇒ 𝔼(σ²(y|N)) = 𝔼(N)σ²(S) + rσ²(S)𝔼(N(N − 1)); σ²(𝔼(y|N)) = 𝔼(S)²σ²(N)',
+    gp101: 'Gamma–Poisson: λ ∼ Gamma(α, β), N|λ ∼ Poisson(λ) ⇒ a posteriori α* = α + ΣNⱼ, 1/β* = 1/β + h; 𝔼(λ|N₁…N<sub>h</sub>) = α*β* = z·N̄ + (1 − z)αβ, z = hβ/(1 + hβ) (ec. 101–103)',
+    beta104: 'Beta–Binomial: p ∼ Beta(u, v); si el suceso sale w veces en h pruebas, u* = u + w, v* = v + h − w; 𝔼(p|datos) = u*/(u* + v*) = z·w/h + (1 − z)·u/(u + v), z = h/(u + v + h) (ec. 104–105)',
+    buhl: 'Bühlmann: h̃ = 𝔼(σ²(Θ|Λ))/σ²(𝔼(Θ|Λ)) = 1/I; z = h/(h + h̃) = hI/(hI + 1); 𝔼(Λ|Θ₁…Θ<sub>h</sub>) = z·Θ̄ + (1 − z)·𝔼(Λ) (ec. 114–116)',
+    clas: 'Credibilidad clásica: z = (m/s)·θ√h/Φ<sup>−1</sup>((1 + β)/2) (si sale > 1, z = 1); prima del subgrupo z·X̄ + (1 − z)m; variación z(X̄ − m)/m (ec. 98–100)',
+    redpp: 'Bonus-malus con el PPVE: % de reducción = (𝔼 a priori − 𝔼 a posteriori)/𝔼 a priori (negativo = recargo)',
     mc72: 'Monte Carlo (§7.2): simular N; si N > 0 simular S₁…S<sub>N</sub> y sumar; repetir M veces; estimar 𝔼, σ, VaR (percentil) y CVaR (media de la cola)'
   };
 

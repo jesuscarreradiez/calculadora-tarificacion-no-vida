@@ -311,5 +311,23 @@ const P = (function () {
     return `${rn(sp, '−(y − ' + f(U) + ')<sup>+</sup>')} = ${vv(val)}`;
   }
 
-  return { CF, CF_ALL, CF_POS, DF, FR, MEAS, famFields, buildFam, withShow, measFields, buildMeas, specOf, usesLvl, usesA, usesMu, std01Explain, genExplain, srcFields, buildSrc, slFormula, layerFormula, rn };
+  /* ───────── Credibilidad de Bühlmann (tema 10), compartida por varias herramientas ─────────
+     o = {E, Ev, Ve, h, xb, sym ('N' o 'y'), target (descuento objetivo, opcional), quien} */
+  function buhlmann(R, o) {
+    const eq = UI.eq, ht = o.Ev / o.Ve, z = o.h / (o.h + ht), Eb = z * o.xb + (1 - z) * o.E, red = (o.E - Eb) / o.E, Y = o.sym || 'y';
+    R.tile('h̃ = 1/I (Bühlmann)', ht).tile('Peso z de la muestra', z).tile(`𝔼 a posteriori (Bühlmann)`, Eb, { main: true }).tile(red >= 0 ? 'Reducción (Bühlmann)' : 'Recargo (Bühlmann)', Math.abs(red), { pct: 1, main: true });
+    R.key('ht', ht).key('z', z).key('Eb', Eb).key('redB', red);
+    R.step('Credibilidad de Bühlmann (ec. 114–116)', eq(`h̃ = 𝔼(σ²(${Y}|Λ))/σ²(𝔼(${Y}|Λ)) = ${f(o.Ev)}/${f(o.Ve)} = ${vv(ht)}`) +
+      eq(`z = h/(h + h̃) = ${f(o.h)}/(${f(o.h)} + ${f(ht)}) = ${vv(z)}; &nbsp; media muestral = ${vv(o.xb)}`) +
+      eq(`𝔼 a posteriori = ${f(z)} × ${f(o.xb)} + ${f(1 - z)} × ${f(o.E)} = ${vv(Eb)} ⇒ ${red >= 0 ? 'reducción' : 'recargo'} = |${f(o.E)} − ${f(Eb)}|/${f(o.E)} = ${vv(Math.abs(red))}`));
+    R.uses('buhl', 'redpp');
+    R.ans('Credibilidad de Bühlmann.', `Con las notaciones del curso, 𝔼(σ²(${Y}|Λ)) = ${f(o.Ev)} y σ²(𝔼(${Y}|Λ)) = ${f(o.Ve)}, luego h̃ = ${f(o.Ev)}/${f(o.Ve)} = ${vv(ht)} (inverso del índice de mixtura). Con h = ${f(o.h)} dato${o.h === 1 ? '' : 's'} de media ${f(o.xb)}, el peso de la información muestral es z = h/(h + h̃) = ${vv(z)} (el de la información a priori, 1 − z = ${f(1 - z)}), y ${o.quien ? 'para ' + o.quien + ' ' : ''}𝔼 a posteriori = ${f(z)} × ${f(o.xb)} + ${f(1 - z)} × ${f(o.E)} = ${vv(Eb)}. Bajo el PPVE el porcentaje de ${red >= 0 ? 'reducción' : 'recargo'} es (${f(o.E)} − ${f(Eb)})/${f(o.E)} ≈ ${T.fmtPct(Math.abs(red))}.`);
+    if (o.target !== null && o.target !== undefined) {
+      const X = o.target >= 1 ? o.target / 100 : o.target, hx = ht * X / (1 - X), hn = Math.ceil(hx - 1e-9);
+      R.tile(`Años sin siniestros para un descuento del ${T.fmtPct(X)}`, String(hn)); R.key('hTarget', hx).key('hYears', hn);
+      R.ans(`Años sin siniestros para un descuento del ${T.fmtPct(X)}.`, `Sin siniestros la media muestral es 0, y 𝔼 a posteriori = (1 − z)𝔼 = 𝔼/(Ih + 1). La reducción es z = hI/(hI + 1) ≥ ${f(X)} ⇔ h ≥ (1/I)(1/(1 − ${f(X)}) − 1) = ${f(ht)} × ${f(X / (1 - X))} = ${vv(hx)}. Habrán de transcurrir ${hn} años${Math.abs(hx - Math.round(hx)) > 1e-9 ? ` (con ${hn - 1} la reducción sería ligeramente menor)` : ''}.`);
+    }
+    return { ht, z, Eb, red };
+  }
+  return { buhlmann, CF, CF_ALL, CF_POS, DF, FR, MEAS, famFields, buildFam, withShow, measFields, buildMeas, specOf, usesLvl, usesA, usesMu, std01Explain, genExplain, srcFields, buildSrc, slFormula, layerFormula, rn };
 })();

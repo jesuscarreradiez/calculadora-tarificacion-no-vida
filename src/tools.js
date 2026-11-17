@@ -75,7 +75,7 @@
       ['Prima de la cartera (71)', 'Π = ρ(−y) − R₀; con reaseguro: ρ(−y) − R₀ + (Π<sub>r</sub> − ρ(−y<sub>c</sub>))']
     ]
   });
-  UI.tema({ n: 99, short: 'Próximamente', offLabel: '10–13', title: '', color: 'var(--faint)', off: true });
+  UI.tema({ n: 99, short: 'Próximamente', offLabel: '11–13', title: '', color: 'var(--faint)', off: true });
 
   /* ═════════ Utilidades comunes ═════════ */
   const level = sp => T.fmtPctLevel(1 - sp.mu);
@@ -815,7 +815,14 @@
         ]
       },
       { title: 'Distribución del parámetro Λ', fields: P.famFields('L_', P.CF, ['gamma', 'normal', 'exponencial', 'uniforme', 'beta', 'lognormal', 'discreta'], 'normal', { L_normal_p_m: '100', L_normal_p_s: '10' }) },
-      { title: 'Dato adicional (opcional)', fields: [{ id: 'sdy', type: 'num', label: 'σ(y) conocida (p. ej. simulada)', def: '', ph: 'opcional', help: 'Si el enunciado da σ(y), el índice se calcula también con ese dato', wide: true }] }
+      { title: 'Dato adicional (opcional)', fields: [{ id: 'sdy', type: 'num', label: 'σ(y) conocida (p. ej. simulada)', def: '', ph: 'opcional', help: 'Si el enunciado da σ(y), el índice se calcula también con ese dato', wide: true }] },
+      {
+        title: 'Credibilidad de Bühlmann (bonus-malus, tema 10)', optional: true, openIf: v => v.bh || v.bobs || v.btg, fields: [
+          { id: 'bobs', type: 'text', label: 'Observaciones del asegurado', def: '', ph: 'p. ej. 0; 0; 0 (o vacío y usa h y la media)', wide: true },
+          { id: 'bh', type: 'num', label: 'o bien: nº de datos h', def: '', ph: 'p. ej. 10' }, { id: 'bxb', type: 'num', label: 'y su media muestral', def: '', ph: '0 si no hubo siniestros' },
+          { id: 'btg', type: 'num', label: 'Descuento objetivo (años sin siniestros)', def: '', ph: 'p. ej. 20 %', help: 'Cuántos años sin siniestros hacen falta para ese descuento', wide: true }
+        ]
+      }
     ],
     solve(V, { result }) {
       const R = result();
@@ -850,21 +857,35 @@
         R.step('Índice con la σ(y) del enunciado', eq(`𝔼(σ²(y|Λ)) = σ²(y) − σ²(𝔼(y|Λ)) = ${f(sdy)}² − ${f(Ve)} = ${f(Ev2)} ⇒ I = ${f(Ve)}/${f(Ev2)} = ${vv(I2)}`) +
           `La diferencia con el valor exacto (${f(I)}) se debe a que la σ(y) dada procede de una simulación.`);
       }
+      const bob = V.list('bobs', { opt: true }), bh = V.nOpt('bh'), btg = V.nOpt('btg');
+      if (bob.length || bh !== null || btg !== null) {
+        const h = bob.length || bh || 0, xb = bob.length ? bob.reduce((a, b) => a + b, 0) / bob.length : (V.nOpt('bxb') || 0);
+        const EvB = sdy !== null ? sdy * sdy - Ve : Ev;
+        if (h > 0) P.buhlmann(R, { E: Ey, Ev: EvB, Ve, h, xb, sym: 'y', target: btg });
+        else if (btg !== null) { const ht = EvB / Ve, X = btg >= 1 ? btg / 100 : btg, hx = ht * X / (1 - X); R.tile(`Años para un descuento del ${pct(X)}`, String(Math.ceil(hx - 1e-9))); R.key('hTarget', hx); R.uses('buhl'); R.ans(`Años sin siniestros para un descuento del ${pct(X)}.`, `Por Bühlmann, sin siniestros 𝔼 a posteriori = 𝔼(y)/(Ih + 1) con I = ${f(1 / ht)}. La reducción hI/(hI + 1) ≥ ${f(X)} exige h ≥ (1/I)(1/(1 − ${f(X)}) − 1) = ${vv(hx)}, es decir, ${Math.ceil(hx - 1e-9)} años.`); }
+        if (sdy !== null) R.note('Bühlmann se ha calculado con la σ(y) del enunciado (como hace la solución oficial).');
+      }
       return R;
     },
     examples: [
-      { id: 'e20-4c', label: 'Enero 2020 · Ej. 4c · N ∈ {0, 1, 2} con p = IP(N = 0) ∼ Beta(1; 1)', values: { cond: 'general', c1: '−1,5', c0: '1,5', d2: '−2,25', d1: '2', d0: '0,25', L_fam: 'beta', L_beta_mode: 'p', L_beta_p_u: '1', L_beta_p_v: '1' },
-        expect: [{ k: 'E', l: '𝔼(N)', v: 0.75 }, { k: 'V', l: 'σ²(N)', v: 0.6875 }, { k: 'Iinv', l: '«Índice» = media de varianzas / varianza de medias', v: 2.666666667 }],
+      { id: 'e20-4c', label: 'Enero 2020 · Ej. 4c · N ∈ {0, 1, 2} con p = IP(N = 0) ∼ Beta(1; 1)', values: { cond: 'general', c1: '−1,5', c0: '1,5', d2: '−2,25', d1: '2', d0: '0,25', L_fam: 'beta', L_beta_mode: 'p', L_beta_p_u: '1', L_beta_p_v: '1', bobs: '2; 2; 2; 0' },
+        expect: [{ k: 'E', l: '𝔼(N)', v: 0.75 }, { k: 'V', l: 'σ²(N)', v: 0.6875 }, { k: 'Iinv', l: '«Índice» = media de varianzas / varianza de medias', v: 2.666666667 }, { k: 'Eb', l: '𝔼(N|2, 2, 2, 0) por Bühlmann', v: 1.2, src: 'cálculo' }],
         note: '𝔼(N|p) = (3/2)(1 − p) = 1,5 − 1,5p y σ²(N|p) = (5/2)(1 − p) − (9/4)(1 − p)² = 0,25 + 2p − 2,25p². El examen llama «índice de mixtura» al cociente inverso del de la ec. (28).' },
       {
-        id: 'j25-4', label: 'Junio 2025 · Ej. 4a-b · y|λ exponencial, λ ∼ N(100; 10)',
-        values: { cond: 'exponencial', L_fam: 'normal', L_normal_p_m: '100', L_normal_p_s: '10', sdy: '100,47' },
-        expect: [{ k: 'E', l: '𝔼(y)', v: 100 }, { k: 'I2', l: 'Índice I (con σ(y) = 100,47)', v: 0.010005782, src: 'σ(y) por Monte Carlo' }]
+        id: 'j25-4', label: 'Junio 2025 · Ej. 4 · y|λ exponencial, λ ∼ N(100; 10); Bühlmann tras diez años sin siniestros',
+        values: { cond: 'exponencial', L_fam: 'normal', L_normal_p_m: '100', L_normal_p_s: '10', sdy: '100,47', bh: '10', bxb: '0' },
+        expect: [{ k: 'E', l: '𝔼(y)', v: 100 }, { k: 'I2', l: 'Índice I (con σ(y) = 100,47)', v: 0.010005782, src: 'σ(y) por Monte Carlo' }, { k: 'ht', l: 'h̃ = 1/I', v: 99.942209, src: 'solución' }]
       },
       {
-        id: 'e26-2c', label: 'Enero 2026 · Ej. 2c · N|λ BN(1; 1/(1+λ)), λ exponencial de media 2',
-        values: { cond: 'binneg', ab: '1', L_fam: 'exponencial', L_exponencial_p_b: '2' },
-        expect: [{ k: 'I', l: 'Índice de mixtura I', v: 0.4, src: 'fórmula cerrada' }]
+        id: 'nov10-buhl', label: 'Clase 10 nov. 2026 · y|Λ exponencial, Λ ∼ N(100; 10): diez años sin siniestros y años para un 20 %',
+        values: { cond: 'exponencial', L_fam: 'normal', L_normal_p_m: '100', L_normal_p_s: '10', bh: '10', bxb: '0', btg: '20%' },
+        expect: [{ k: 'I', l: 'I', v: 0.00990099 }, { k: 'Eb', l: '𝔼 a posteriori', v: 90.99099099 }, { k: 'redB', l: 'Reducción', v: 0.09009009 }, { k: 'hTarget', l: 'h para un 20 %', v: 25.25 }]
+      },
+      {
+        id: 'e26-2c', label: 'Enero 2026 · Ej. 2c · N|λ BN(1; 1/(1+λ)), λ exponencial de media 2; Bühlmann con 0, 2, 2, 0',
+        values: { cond: 'binneg', ab: '1', L_fam: 'exponencial', L_exponencial_p_b: '2', bobs: '0; 2; 2; 0' },
+        expect: [{ k: 'I', l: 'Índice de mixtura I', v: 0.4, src: 'fórmula cerrada' }, { k: 'Eb', l: '𝔼 a posteriori (Bühlmann)', v: 1.076923077, src: 'solución (errata)' }, { k: 'redB', l: 'Reducción', v: 0.461538462, src: 'solución (errata)' }],
+        note: '<b>Errata en la solución oficial del apartado c):</b> con I = 0,4, h̃ = 2,5 y media muestral (0 + 2 + 2 + 0)/4 = 1, su propia fórmula 1/(1 + 4I)·𝔼(λ) + 4I/(1 + 4I)·1 da 0,3846 × 2 + 0,6154 × 1 = 1,3846 (reducción del 30,77 %), no 1,0769 (que saldría con una media muestral de 0,5).'
       },
       { id: 'j24-4', label: 'Junio 2024 · Ej. 4 · N|λ Poisson, λ ∼ Gamma(5; 0,1)', values: { cond: 'poisson', L_fam: 'gamma', L_gamma_mode: 'p', L_gamma_p_a: '5', L_gamma_p_b: '0,1' }, expect: [{ k: 'I', l: 'Índice de mixtura (= β)', v: 0.1 }] }
     ]
@@ -881,7 +902,8 @@
         title: 'Tipos', fields: [
           { id: 'vals', type: 'text', label: 'Valores de N (separados por «;»)', def: '0; 1; 2; 3', wide: true },
           { id: 'tipos', type: 'rows', label: 'Cada tipo: peso en la cartera y probabilidades de cada valor', cols: [{ id: 'w', label: 'Peso', w: '22%' }, { id: 'p', label: 'Probabilidades (separadas por «;»)', type: 'text' }], def: [{ w: '0,5', p: '0,5; 0,3; 0,2; 0' }, { w: '0,5', p: '0,3; 0,4; 0,2; 0,1' }] },
-          { id: 'obs', type: 'text', label: 'Siniestros observados de un asegurado (opcional)', def: '', ph: 'p. ej. 0; 0', help: 'Actualiza los pesos por el teorema de Bayes (avance del tema 10)', wide: true }
+          { id: 'obs', type: 'text', label: 'Observaciones de un asegurado (opcional)', def: '', ph: 'p. ej. 0; 0 (dos años sin siniestros)', help: 'Valores observados de N (o del coste, si los valores de la tabla son costes). Activa Bayes y Bühlmann', wide: true },
+          { id: 'buOn', type: 'check', label: 'Calcular también con la credibilidad de Bühlmann', def: true, wide: true }
         ]
       },
       {
@@ -937,12 +959,23 @@
         R.step('Pesos a posteriori (teorema de Bayes)', eq(post.map((p, i) => `IP(tipo ${i + 1} | obs.) = ${f(tipos[i].w)} × ${f(lik[i])}/${f(den)} = ${vv(p)}`).join('<br>')));
         const q = analyse(post, 'Asegurado observado (pesos a posteriori)');
         const redE = (g.D.mean - q.D.mean) / g.D.mean, redP = (g.Pi - q.Pi) / g.Pi;
-        R.tile('𝔼(N) a posteriori', q.D.mean).tile(rn(sp, '−y') + ' a posteriori', q.rho).tile('Reducción con PPVE', redE, { pct: 1 }).tile('Reducción con Π', redP, { pct: 1 });
+        R.tile('𝔼(N) a posteriori', q.D.mean).tile(rn(sp, '−y') + ' a posteriori', q.rho).tile(redE >= 0 ? 'Reducción con PPVE' : 'Recargo con PPVE', Math.abs(redE), { pct: 1 }).tile(redP >= 0 ? 'Reducción con Π' : 'Recargo con Π', Math.abs(redP), { pct: 1 });
         R.uses('bayes'); R.key('post1', post[0]).key('rhoPost', q.rho).key('primaPost', q.Pi).key('redE', redE).key('redP', redP);
         R.ans('Probabilidades a posteriori.', `Aplicando el teorema de Bayes a las observaciones (${obs.map(o => f(o)).join(', ')}): ${post.map((p, i) => `IP(tipo ${i + 1}) = ${vv(p)}`).join('; ')}.`);
         R.ans('Asegurado observado.', ansTipo(q, post, 'nuestro asegurado'));
-        R.ans('Reducción / recargo.', `Bajo el principio del valor esperado, el porcentaje de ${redE >= 0 ? 'reducción' : 'recargo'} es (${f(g.D.mean)} − ${f(q.D.mean)})/${f(g.D.mean)} = ${vv(redE)} ≈ ${pct(redE)}. Con el principio Π, (${f(g.Pi)} − ${f(q.Pi)})/${f(g.Pi)} = ${vv(redP)} ≈ ${pct(redP)}.`);
+        R.ans('Reducción / recargo.', `Bajo el principio del valor esperado, el porcentaje de ${redE >= 0 ? 'reducción' : 'recargo'} es |${f(g.D.mean)} − ${f(q.D.mean)}|/${f(g.D.mean)} = ${vv(Math.abs(redE))} ≈ ${pct(Math.abs(redE))}. Con el principio Π, el de ${redP >= 0 ? 'reducción' : 'recargo'} es |${f(g.Pi)} − ${f(q.Pi)}|/${f(g.Pi)} = ${vv(Math.abs(redP))} ≈ ${pct(Math.abs(redP))}.`);
         R.step('Recargo / reducción', eq(`PPVE: (${f(g.D.mean)} − ${f(q.D.mean)})/${f(g.D.mean)} = ${vv(redE)} (${pct(redE)})`) + eq(`Principio Π: (${f(g.Pi)} − ${f(q.Pi)})/${f(g.Pi)} = ${vv(redP)} (${pct(redP)})`) + 'Positivo = reducción; negativo = recargo.');
+        if (obs.length > 1) { // Bayes paso a paso, como en las soluciones del profesor
+          let w = tipos.map(t => t.w); const rowsB = [];
+          obs.forEach((o, k) => { const j = xs.findIndex(x => Math.abs(x - o) < 1e-12); const den2 = tipos.reduce((a, t, i) => a + w[i] * t.ps[j], 0); w = tipos.map((t, i) => w[i] * t.ps[j] / den2); rowsB.push([`Tras ${f(o)} (${k + 1}ª)`, ...w]); });
+          R.table('Teorema de Bayes aplicado observación a observación', ['Observación', ...tipos.map((_, i) => `IP(tipo ${i + 1})`)], rowsB);
+        }
+        if (V.b('buOn')) {
+          const Evy = tipos.reduce((a, t) => a + t.w * t.V, 0) * cS * cS, EE = tipos.reduce((a, t) => a + t.w * t.E, 0), Vey = tipos.reduce((a, t) => a + t.w * (t.E - EE) ** 2, 0) * cS * cS;
+          const xb = obs.reduce((a, b) => a + b, 0) / obs.length * cS;
+          const B = P.buhlmann(R, { E: g.D.mean, Ev: Evy, Ve: Vey, h: obs.length, xb, sym: yl === 'N' ? 'N' : 'y', quien: 'este asegurado' });
+          R.ans('¿Por qué no coinciden Bayes y Bühlmann?', `Por Bayes (exacto) el ${redE >= 0 ? 'descuento' : 'recargo'} es ${pct(Math.abs(redE))} y por Bühlmann ${pct(Math.abs(B.red))}. Bühlmann aproxima 𝔼(Λ|datos) por una recta en la media muestral (ec. 111): exige que el error tenga covarianza nula con la muestra, y la covarianza nula no implica independencia, así que 𝔼(ε|datos) no es exactamente cero. Sólo hay coincidencia exacta en casos como Gamma–Poisson, Beta–Binomial o con normalidad; aquí la respuesta exacta es la bayesiana y la de Bühlmann es una aproximación.`);
+        }
       }
       return R;
     },
@@ -952,6 +985,12 @@
       { id: 'e19-34', label: 'Enero 2019 · Ej. 3-4 · tres grupos, severidad 1000, VaR 85 %, tres años sin siniestros', values: { vals: '0; 1; 2', tipos: [{ w: '30000', p: '0,5; 0,4; 0,1' }, { w: '30000', p: '0,4; 0,4; 0,2' }, { w: '40000', p: '0,4; 0,3; 0,3' }], obs: '0; 0; 0', sevc: '1000', m_rho: 'VaR', m_lvl: '85', A: '1', B: '0' },
         expect: [{ k: 'Et1', l: '𝔼(y|G1)', v: 600 }, { k: 'sdt1', l: 'σ(y|G1)', v: 663.3249581 }, { k: 'rt1', l: 'VaR<sub>85%</sub>(y|G1)', v: 1000 }, { k: 'rt2', l: 'VaR<sub>85%</sub>(y|G2)', v: 2000 }, { k: 'rt3', l: 'VaR<sub>85%</sub>(y|G3)', v: 2000 }, { k: 'post1', l: 'IP(G1 | 0, 0, 0)', v: 0.455650061 }, { k: 'redE', l: 'Reducción PPVE', v: 0.05408867, src: 'errata: debe ser 5,13 %' }],
         note: '<b>Errata en la solución oficial:</b> con sus propias cifras, (0,78 − 0,739975699)/0,78 = 0,0513 ≈ 5,13 %, no 5,41 %. La media a posteriori 0,739975699 y las probabilidades a posteriori sí coinciden.' },
+      { id: 'bu-ej1', label: 'Clase · Bühlmann frente a Bayes · grupos A (80 %) y B, una observación Λ = 2', values: { vals: '0; 1; 2; 3', tipos: [{ w: '0,8', p: '0,5; 0,3; 0,2; 0' }, { w: '0,2', p: '0,3; 0,3; 0,3; 0,1' }], obs: '2', buOn: true, sevc: '1', m_rho: 'CVaR', m_lvl: '90', A: '1', B: '0' },
+        expect: [{ k: 'post1', l: 'IP(A | Λ = 2)', v: 0.727272727 }, { k: 'redE', l: 'Bayes: recargo (negativo)', v: -0.045454545 }, { k: 'ht', l: 'h̃', v: 17 }, { k: 'redB', l: 'Bühlmann: recargo (negativo)', v: -0.083333333 }] },
+      { id: 'bu-ej2', label: 'Clase · Bühlmann frente a Bayes · grupos A/B/C con valores del coste, y = 1000, 3000, 3000, 2000; Π = 1,1𝔼 + 0,09VaR99', values: { vals: '1000; 1500; 2000; 3000', tipos: [{ w: '0,5', p: '0,1; 0,3; 0,4; 0,2' }, { w: '0,4', p: '0,2; 0,3; 0,4; 0,1' }, { w: '0,1', p: '0,4; 0,3; 0,3; 0' }], obs: '1000; 3000; 3000; 2000', buOn: true, sevc: '1', m_rho: 'VaR', m_lvl: '99', A: '1,1', B: '0,09' },
+        expect: [{ k: 'ht', l: 'h̃', v: 13.63070539 }, { k: 'z', l: 'z', v: 0.226876912 }, { k: 'Eb', l: '𝔼 Bühlmann', v: 1917.557072 }, { k: 'redB', l: 'Bühlmann: recargo (negativo)', v: -0.053602787 }, { k: 'post1', l: 'IP(A | datos)', v: 0.714285714 }, { k: 'redE', l: 'Bayes: recargo (negativo)', v: -0.040031397 }, { k: 'prima', l: 'Prima a priori', v: 2272 }, { k: 'primaPost', l: 'Prima a posteriori', v: 2352.142857 }, { k: 'redP', l: 'Recargo con Π (negativo)', v: -0.035274145 }] },
+      { id: 'e15-4', label: 'Enero 2015 · Ej. 4 · tres tipos k (30/30/40 %), datos 0, 1, 0, 2, 0: Bühlmann y Bayes', values: { vals: '0; 1; 2; 3', tipos: [{ w: '0,3', p: '0,1; 0,2; 0,3; 0,4' }, { w: '0,3', p: '0,15; 0,25; 0,3; 0,3' }, { w: '0,4', p: '0,2; 0,2; 0,3; 0,3' }], obs: '0; 1; 0; 2; 0', buOn: true, sevc: '1', m_rho: 'CVaR', m_lvl: '90', A: '1', B: '0' } },
+      { id: 'e14-4b', label: 'Enero 2014 · Ej. 4b · dos distribuciones del coste (50/50), y = 100, 150, 100: Bühlmann', values: { vals: '100; 150; 200', tipos: [{ w: '0,5', p: '0,8; 0,2; 0' }, { w: '0,5', p: '0,5; 0,3; 0,2' }], obs: '100; 150; 100', buOn: true, sevc: '1', m_rho: 'CVaR', m_lvl: '90', A: '1', B: '0' }, note: 'El peso de la muestra en función de h es z = h/(h + h̃), con el h̃ que da la calculadora.' },
       { id: 'e17-4a', label: 'Enero 2017 · Ej. 4a · cuatro grupos, observaciones N = 3 y N = 2', values: { vals: '0; 1; 2; 3; 4', tipos: [{ w: '50', p: '0,5; 0,2; 0,2; 0,1; 0' }, { w: '30', p: '0,4; 0,2; 0,2; 0,1; 0,1' }, { w: '15', p: '0,3; 0,2; 0,2; 0,2; 0,1' }, { w: '5', p: '0,1; 0,2; 0,2; 0,2; 0,3' }], obs: '3; 2', sevc: '1', m_rho: 'CVaR', m_lvl: '90', A: '1', B: '0' } },{
       id: 'j23-3', label: 'Junio 2023 · Ej. 3 · dos tipos, dos años sin siniestros',
       values: { vals: '0; 1; 2; 3', tipos: [{ w: '0,5', p: '0,5; 0,3; 0,2; 0' }, { w: '0,5', p: '0,3; 0,4; 0,2; 0,1' }], obs: '0; 0', m_rho: 'CVaR', m_lvl: '86', A: '1,1', B: '0,1' },
