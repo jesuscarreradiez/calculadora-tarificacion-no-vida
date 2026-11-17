@@ -412,6 +412,51 @@ const TNV = (function () {
       sample: r => m + s * r.norm() / Math.sqrt(2 * r.gamma(nu / 2) / nu)
     });
   }
+  // Mixtura de distribuciones: S = Sᵢ con probabilidad wᵢ (p. ej. siniestros leves, moderados y graves)
+  function mixtureDist(comps, ws) {
+    const sw = ws.reduce((a, b) => a + b, 0), w = ws.map(x => x / sw);
+    const mean = comps.reduce((a, c, i) => a + w[i] * c.mean, 0);
+    const m2 = comps.reduce((a, c, i) => a + w[i] * (c.var + c.mean * c.mean), 0);
+    const cum = []; let acc = 0; w.forEach(x => { acc += x; cum.push(acc); });
+    const sfOf = (c, x) => c.sf ? c.sf(x) : 1 - c.cdf(x);
+    return makeCont({
+      fam: 'mixtura', comps, ws: w, mean, var: m2 - mean * mean,
+      lo: Math.min(...comps.map(c => c.kind === 'disc' ? c.min : (c.q ? c.q(0) : -Infinity))),
+      cdf: x => comps.reduce((a, c, i) => a + w[i] * c.cdf(x), 0),
+      sf: x => comps.reduce((a, c, i) => a + w[i] * sfOf(c, x), 0),
+      pdf: comps.every(c => c.pdf) ? (x => comps.reduce((a, c, i) => a + w[i] * c.pdf(x), 0)) : undefined,
+      SL: x => comps.reduce((a, c, i) => a + w[i] * c.SL(x), 0),
+      heavy: comps.some(c => c.heavy),
+      sample: r => { const u = r.u(); let i = 0; while (i < cum.length - 1 && u > cum[i]) i++; return comps[i].sample(r); }
+    });
+  }
+  // Suma de pólizas independientes (riesgo colectivo exacto de una cartera):
+  // parts = [{dist, n}], dist discreta en [0, ∞). Se discretiza en una rejilla común y se eleva la
+  // función característica a nᵢ (FFT), sin aproximar por la normal.
+  function sumIID(parts, log2M) {
+    const M = 1 << (log2M || 20);
+    const Mt = parts.reduce((a, p) => a + p.n * p.dist.mean, 0), St = Math.sqrt(parts.reduce((a, p) => a + p.n * p.dist.var, 0));
+    const top = Mt + 14 * St + Math.max(...parts.map(p => p.dist.max || 0));
+    const H = top / (M - 1);
+    const reT = new Float64Array(M), imT = new Float64Array(M); reT[0] = 1;
+    let first = true;
+    for (const p of parts) {
+      if (!(p.n > 0)) continue;
+      const re = new Float64Array(M), im = new Float64Array(M), D = p.dist;
+      for (let i = 0; i < D.n; i++) { const k = Math.min(M - 1, Math.round(D.xs[i] / H)); re[k] += D.ps[i]; }
+      fft(re, im, false);
+      for (let k = 0; k < M; k++) {
+        const [la, lb] = clog(re[k], im[k]); const [zr, zi] = cexp(p.n * la, p.n * lb);
+        if (first) { reT[k] = zr; imT[k] = zi; } else { const t = reT[k] * zr - imT[k] * zi; imT[k] = reT[k] * zi + imT[k] * zr; reT[k] = t; }
+      }
+      first = false;
+    }
+    fft(reT, imT, true);
+    const xs = [], ps = [];
+    for (let k = 0; k < M; k++) { const v = reT[k]; if (v > 1e-18) { xs.push(k * H); ps.push(v); } }
+    const R = makeDisc(xs, ps); R.H = H;
+    return R;
+  }
   function constant(c) { const D = makeDisc([c], [1]); D.fam = 'constante'; D.sample = () => c; return D; }
   function discreteTable(xs, ps) {
     const D = makeDisc(xs, ps); D.fam = 'discreta';
@@ -678,6 +723,11 @@ const TNV = (function () {
       if (vals.length && vals.every(v => v > 0)) { unit = vals.reduce((a, b) => fg(Math.max(a, b), Math.min(a, b))); if (!(unit > 0) || vals.some(v => Math.abs(v / unit - Math.round(v / unit)) > 1e-7) || Math.max(...vals) / unit > 1e5) unit = 0; }
     }
     let MFv = MF0;
+    // Colas pesadas: la rejilla debe llegar hasta donde la severidad deja masa despreciable
+    if (!unit && S.kind === 'cont' && S.qs) {
+      const xt = S.qs(1e-10 / (1 + N.mean)) - d;
+      if (isFinite(xt) && xt > 0) cover = Math.max(cover, Math.min(isFinite(L) ? 4 * L : Infinity, 1.5 * xt));
+    }
     if (unit) { MFv = 256; while (MFv < 2 * cover / unit && MFv < (1 << 20)) MFv *= 2; }
     let g = null, h = 0, topMass = 1;
     for (let tries = 0; tries < 12; tries++) {
@@ -850,7 +900,7 @@ const TNV = (function () {
   return {
     phi, Phi, PhiInv, logPhi, lgamma, gammaFn, gammaP, gammaQ, betaI, bisect, solveIncreasing, glNodes,
     makeDisc, makeCont, normal, lognormal, lognormalMoments, gammaD, wald, betaD, uniform, gumbel, frechet, weibull, pareto, gpd, student, constant, discreteTable,
-    poisson, negbin, binomial, freqTable, rng, setProfPi, profPi: () => PROF_PI,
+    poisson, negbin, binomial, freqTable, rng, mixtureDist, sumIID, setProfPi, profPi: () => PROF_PI,
     risk, riskName, rhoStd, expectile, spectral, wangG, comonotoneAdditive, translationInvariant,
     plEval, plSlopes, plComplement, transformDist, layerRisk,
     paymentMoments, compound, fft,

@@ -774,6 +774,51 @@ const TNV = (function () {
       sample: r => m + s * r.norm() / Math.sqrt(2 * r.gamma(nu / 2) / nu)
     });
   }
+  // Mixtura de distribuciones: S = Sᵢ con probabilidad wᵢ (p. ej. siniestros leves, moderados y graves)
+  function mixtureDist(comps, ws) {
+    const sw = ws.reduce((a, b) => a + b, 0), w = ws.map(x => x / sw);
+    const mean = comps.reduce((a, c, i) => a + w[i] * c.mean, 0);
+    const m2 = comps.reduce((a, c, i) => a + w[i] * (c.var + c.mean * c.mean), 0);
+    const cum = []; let acc = 0; w.forEach(x => { acc += x; cum.push(acc); });
+    const sfOf = (c, x) => c.sf ? c.sf(x) : 1 - c.cdf(x);
+    return makeCont({
+      fam: 'mixtura', comps, ws: w, mean, var: m2 - mean * mean,
+      lo: Math.min(...comps.map(c => c.kind === 'disc' ? c.min : (c.q ? c.q(0) : -Infinity))),
+      cdf: x => comps.reduce((a, c, i) => a + w[i] * c.cdf(x), 0),
+      sf: x => comps.reduce((a, c, i) => a + w[i] * sfOf(c, x), 0),
+      pdf: comps.every(c => c.pdf) ? (x => comps.reduce((a, c, i) => a + w[i] * c.pdf(x), 0)) : undefined,
+      SL: x => comps.reduce((a, c, i) => a + w[i] * c.SL(x), 0),
+      heavy: comps.some(c => c.heavy),
+      sample: r => { const u = r.u(); let i = 0; while (i < cum.length - 1 && u > cum[i]) i++; return comps[i].sample(r); }
+    });
+  }
+  // Suma de pólizas independientes (riesgo colectivo exacto de una cartera):
+  // parts = [{dist, n}], dist discreta en [0, ∞). Se discretiza en una rejilla común y se eleva la
+  // función característica a nᵢ (FFT), sin aproximar por la normal.
+  function sumIID(parts, log2M) {
+    const M = 1 << (log2M || 20);
+    const Mt = parts.reduce((a, p) => a + p.n * p.dist.mean, 0), St = Math.sqrt(parts.reduce((a, p) => a + p.n * p.dist.var, 0));
+    const top = Mt + 14 * St + Math.max(...parts.map(p => p.dist.max || 0));
+    const H = top / (M - 1);
+    const reT = new Float64Array(M), imT = new Float64Array(M); reT[0] = 1;
+    let first = true;
+    for (const p of parts) {
+      if (!(p.n > 0)) continue;
+      const re = new Float64Array(M), im = new Float64Array(M), D = p.dist;
+      for (let i = 0; i < D.n; i++) { const k = Math.min(M - 1, Math.round(D.xs[i] / H)); re[k] += D.ps[i]; }
+      fft(re, im, false);
+      for (let k = 0; k < M; k++) {
+        const [la, lb] = clog(re[k], im[k]); const [zr, zi] = cexp(p.n * la, p.n * lb);
+        if (first) { reT[k] = zr; imT[k] = zi; } else { const t = reT[k] * zr - imT[k] * zi; imT[k] = reT[k] * zi + imT[k] * zr; reT[k] = t; }
+      }
+      first = false;
+    }
+    fft(reT, imT, true);
+    const xs = [], ps = [];
+    for (let k = 0; k < M; k++) { const v = reT[k]; if (v > 1e-18) { xs.push(k * H); ps.push(v); } }
+    const R = makeDisc(xs, ps); R.H = H;
+    return R;
+  }
   function constant(c) { const D = makeDisc([c], [1]); D.fam = 'constante'; D.sample = () => c; return D; }
   function discreteTable(xs, ps) {
     const D = makeDisc(xs, ps); D.fam = 'discreta';
@@ -1040,6 +1085,11 @@ const TNV = (function () {
       if (vals.length && vals.every(v => v > 0)) { unit = vals.reduce((a, b) => fg(Math.max(a, b), Math.min(a, b))); if (!(unit > 0) || vals.some(v => Math.abs(v / unit - Math.round(v / unit)) > 1e-7) || Math.max(...vals) / unit > 1e5) unit = 0; }
     }
     let MFv = MF0;
+    // Colas pesadas: la rejilla debe llegar hasta donde la severidad deja masa despreciable
+    if (!unit && S.kind === 'cont' && S.qs) {
+      const xt = S.qs(1e-10 / (1 + N.mean)) - d;
+      if (isFinite(xt) && xt > 0) cover = Math.max(cover, Math.min(isFinite(L) ? 4 * L : Infinity, 1.5 * xt));
+    }
     if (unit) { MFv = 256; while (MFv < 2 * cover / unit && MFv < (1 << 20)) MFv *= 2; }
     let g = null, h = 0, topMass = 1;
     for (let tries = 0; tries < 12; tries++) {
@@ -1212,7 +1262,7 @@ const TNV = (function () {
   return {
     phi, Phi, PhiInv, logPhi, lgamma, gammaFn, gammaP, gammaQ, betaI, bisect, solveIncreasing, glNodes,
     makeDisc, makeCont, normal, lognormal, lognormalMoments, gammaD, wald, betaD, uniform, gumbel, frechet, weibull, pareto, gpd, student, constant, discreteTable,
-    poisson, negbin, binomial, freqTable, rng, setProfPi, profPi: () => PROF_PI,
+    poisson, negbin, binomial, freqTable, rng, mixtureDist, sumIID, setProfPi, profPi: () => PROF_PI,
     risk, riskName, rhoStd, expectile, spectral, wangG, comonotoneAdditive, translationInvariant,
     plEval, plSlopes, plComplement, transformDist, layerRisk,
     paymentMoments, compound, fft,
@@ -1812,7 +1862,29 @@ const P = (function () {
   const CF_POS = ['exponencial', 'gamma', 'lognormal', 'normal', 'pareto', 'weibull', 'gpd', 'wald', 'uniforme', 'beta', 'chi2', 'frechet'];
 
   /* ───────── Familias discretas sencillas ───────── */
+  const MIXF = { lognormal: 'Log-normal', gamma: 'Gamma', exponencial: 'Exponencial', normal: 'Normal', constante: 'Constante' };
   const DF = {
+    mixtura: {
+      lab: 'Mixtura de tipos (leve, moderado, grave…) por media y desviación',
+      fields: p => [{ id: p + 'mx', type: 'rows', label: 'Un tipo de siniestro por fila: probabilidad, distribución, media y desviación', cols: [{ id: 'nom', label: 'Tipo', type: 'text', w: '16%' }, { id: 'p', label: 'Prob.' }, { id: 'fam', label: 'Distribución', type: 'sel', opts: Object.entries(MIXF), def: 'lognormal', w: '24%' }, { id: 'E', label: 'Media' }, { id: 'sd', label: 'Desviación' }],
+        def: [{ nom: 'Leve', p: '0,8', fam: 'lognormal', E: '1', sd: '0,5' }, { nom: 'Moderado', p: '0,15', fam: 'lognormal', E: '3', sd: '2' }, { nom: 'Grave', p: '0,05', fam: 'lognormal', E: '10', sd: '10' }], wide: true }],
+      build: (V, p) => {
+        const rows = V.rows(p + 'mx'); if (!rows.length) throw new Error('Añade al menos un tipo de siniestro.');
+        const sp = rows.reduce((a, r) => a + r.p, 0); if (Math.abs(sp - 1) > 1e-6) throw new Error(`Las probabilidades de los tipos suman ${f(sp)} y deben sumar 1.`);
+        const comps = rows.map((r, i) => {
+          const fam = r.fam || 'lognormal';
+          if (fam === 'constante') return T.constant(r.E);
+          if (!(r.sd > 0) && fam !== 'exponencial') throw new Error(`Tipo ${i + 1}: la desviación debe ser positiva.`);
+          if (fam === 'lognormal') return T.lognormalMoments(r.E, r.sd);
+          if (fam === 'gamma') return T.gammaD((r.E / r.sd) ** 2, r.sd * r.sd / r.E);
+          if (fam === 'exponencial') return T.gammaD(1, r.E);
+          return T.normal(r.E, r.sd);
+        });
+        const D = T.mixtureDist(comps, rows.map(r => r.p));
+        const Vm = rows.reduce((a, r, i) => a + r.p * comps[i].mean ** 2, 0) - D.mean ** 2, Ev = rows.reduce((a, r, i) => a + r.p * comps[i].var, 0);
+        return { D, ex: `La severidad es una mixtura: ${rows.map((r, i) => `${r.nom || 'tipo ' + (i + 1)} con probabilidad ${f(r.p)} (${MIXF[r.fam || 'lognormal'].toLowerCase()} de media ${f(r.E)} y desviación ${f(r.fam === 'exponencial' ? r.E : r.sd)})`).join('; ')}. Por (27): 𝔼(S) = Σ pᵢ𝔼ᵢ = ${f(D.mean)}; σ²(S) = varianza de medias + media de varianzas = ${f(Vm)} + ${f(Ev)} = ${f(D.var)} (σ(S) = ${f(D.sd)}).` };
+      }
+    },
     constante: {
       lab: 'Constante (siempre el mismo valor)',
       fields: p => [{ id: p + 'cte', type: 'num', label: 'Valor', def: '1' }],
@@ -1988,7 +2060,7 @@ const P = (function () {
     if (kinds.includes('cont')) out.push(...withShow(famFields(p + 'c_', CF, CF_ALL, over.contFam || 'normal', over), is('cont')));
     if (kinds.includes('compuesta')) out.push(...withShow([
       ...famFields(p + 'N_', FR, Object.keys(FR), 'binneg', over, 'Frecuencia N'),
-      ...famFields(p + 'S_', CF, CF_POS.concat(['constante', 'discreta']), 'lognormal', over, 'Severidad S'),
+      ...famFields(p + 'S_', CF, CF_POS.concat(['mixtura', 'constante', 'discreta']), 'lognormal', over, 'Severidad S'),
       { id: p + 'd', type: 'num', label: 'Franquicia por siniestro d', def: '', ph: 'sin franquicia' },
       { id: p + 'L', type: 'num', label: 'Indemnización máx. por siniestro', def: '', ph: 'sin límite' },
       { id: p + 'F', type: 'num', label: 'Indemnización máx. anual (agregada)', def: '', ph: 'sin límite' }
@@ -2129,6 +2201,17 @@ const P = (function () {
 
   /* ═════════ Utilidades comunes ═════════ */
   const level = sp => T.fmtPctLevel(1 - sp.mu);
+  // «VaR 95; CVaR 95; SW 1; Expectil 0,3» → especificaciones de medidas
+  const MEAS_ALIAS = { var: 'VaR', cvar: 'CVaR', sw: 'SW', wang: 'Wang', w: 'Wang', dpt: 'DPT', sdpt: 'SDPT', expectil: 'Expectil', e: 'Expectil', entropica: 'Entropica', spow: 'SPow' };
+  function parseMeasList(str) {
+    return String(str || '').split(/[;|\n]+/).map(x => x.trim()).filter(Boolean).map(tok => {
+      const m = tok.match(/^([A-Za-zñÑáéíóú𝔈]+)\s*[_ ]?\s*([−\-+]?[\d.,]+)\s*%?$/);
+      if (!m) throw new Error(`No entiendo la medida «${tok}». Escribe p. ej. «VaR 95; CVaR 95; SW 1».`);
+      const t = MEAS_ALIAS[m[1].toLowerCase().replace('𝔈', 'e')];
+      if (!t) throw new Error(`Medida desconocida «${m[1]}». Usa VaR, CVaR, SW, Wang, DPT, SDPT o Expectil.`);
+      return P.specOf(t, T.parseNum(m[2]), `«${tok}»`);
+    });
+  }
   function normalCartera(n, E, sd, sp, Pi) {
     // aproximación normal de la cartera de n pólizas (TCL, tema 6)
     const mN = n * E, sN = Math.sqrt(n) * sd;
@@ -2346,12 +2429,13 @@ const P = (function () {
     que: 'Construye la indemnización anual de una póliza y = S₁ + … + S<sub>N</sub> (composición de frecuencia y severidad, tema 3). La media y la desviación salen de la fórmula (26); el CVaR (o la medida elegida) necesita la distribución completa de y, que se obtiene discretizando la severidad y componiendo de forma exacta (equivale al método de Panjer; el profesor usa Monte Carlo). Con ello se calculan la prima, el riesgo que asume el asegurador y la probabilidad de perder dinero.',
     groups: [
       { title: 'Frecuencia N', fields: P.famFields('N_', P.FR, Object.keys(P.FR), 'binneg') },
-      { title: 'Severidad S', fields: P.famFields('S_', P.CF, P.CF_POS.concat(['constante', 'discreta']), 'lognormal') },
+      { title: 'Severidad S', fields: P.famFields('S_', P.CF, P.CF_POS.concat(['mixtura', 'constante', 'discreta']), 'lognormal') },
       {
-        title: 'Franquicia e indemnizaciones máximas', optional: true, openIf: v => v.d || v.L || v.F, fields: [
+        title: 'Franquicia e indemnizaciones máximas', optional: true, openIf: v => v.d || v.L || v.F || v.Dg, fields: [
           { id: 'd', type: 'num', label: 'Franquicia por siniestro d', def: '', ph: 'sin franquicia', help: 'Cada siniestro paga (S − d)⁺' },
           { id: 'L', type: 'num', label: 'Indemnización máx. por siniestro', def: '', ph: 'sin límite', help: 'Cada siniestro paga min{S, L}' },
-          { id: 'F', type: 'num', label: 'Indemnización máx. anual F', def: '', ph: 'sin límite', help: 'Se paga min{y, F}', wide: true }
+          { id: 'F', type: 'num', label: 'Indemnización máx. anual F', def: '', ph: 'sin límite', help: 'Se paga min{y, F}', wide: true },
+          { id: 'Dg', type: 'num', label: 'Franquicia sobre el coste anual D: se paga (y − D)⁺', def: '', ph: 'sin franquicia anual', help: '«Franquicia igual a 5» aplicada al coste agregado: calcula todo también para (y − D)⁺', wide: true }
         ]
       },
       {
@@ -2366,13 +2450,19 @@ const P = (function () {
           { id: 'eps', type: 'num', label: 'Objetivo IP(pérdida) ≤ ε ⇒ k mínimo', def: '', ph: 'opcional (p. ej. 20 %)', help: 'Calcula el k mínimo de Π = (1+k)𝔼(y) + b·ρ(−y)', wide: true },
           { id: 'gfrac', type: 'num', label: 'IP(ganar al menos esta fracción de Π)', def: '', ph: 'p. ej. 0,5', help: 'IP(Π − y ≥ f·Π) = IP(y ≤ (1 − f)Π)' },
           { id: 'ncond', type: 'num', label: 'Condicionar a N = n y a N ≤ n', def: '', ph: 'p. ej. 1', help: 'IP(ganar | N = n) e IP(ganar | N ≤ n); usa la fracción anterior si la hay' },
+          { id: 'extra', type: 'text', label: 'Otras medidas a calcular', def: '', ph: 'p. ej. VaR 95; CVaR 95; SW 1', help: 'Se calculan para y (y para (y − D)⁺ si hay franquicia anual)', wide: true },
+          { id: 'lossF', type: 'num', label: 'IP(pérdidas > f·Π): f =', def: '', ph: 'p. ej. 0,85', help: 'Pérdidas = y − Π; IP(y − Π > f·Π) = IP(y > (1 + f)Π)' },
           { id: 'panjP', type: 'num', label: 'Panjer: hasta U con IP(y > U) ≤', def: '', ph: 'p. ej. 0,3', help: 'Sólo con severidad discreta: tabla de Panjer hasta ese umbral', wide: true }
         ]
       },
       {
-        title: 'Cartera de n pólizas independientes (aprox. normal)', optional: true, openIf: v => v.n || v.epsN, fields: [
+        title: 'Cartera de n pólizas independientes (riesgo individual y colectivo)', optional: true, openIf: v => v.n || v.epsN, fields: [
           { id: 'n', type: 'num', label: 'Número de pólizas n', def: '', ph: 'opcional' },
-          { id: 'epsN', type: 'num', label: 'ε para el n mínimo', def: '', ph: 'p. ej. 5 %', help: 'n mínimo con IP(pérdida) ≤ ε y con ρ(nΠ − Y) ≤ 0' }
+          { id: 'epsN', type: 'num', label: 'ε para el n mínimo', def: '', ph: 'p. ej. 5 %', help: 'n mínimo con IP(pérdida) ≤ ε y con ρ(nΠ − Y) ≤ 0' },
+          { id: 'nD', type: 'num', label: 'De ellas, con la franquicia anual D', def: '', ph: 'p. ej. 2500 (la mitad)', help: 'Necesita la franquicia anual D del grupo de arriba' },
+          { id: 'colOn', type: 'check', label: 'Riesgo colectivo: distribución exacta de la cartera (sin aproximar por la normal) y comparación', def: false, wide: true },
+          { id: 'mkOn', type: 'check', label: 'La cartera usa otra medida de riesgo', def: false, wide: true },
+          ...P.withShow(P.measFields('mk_', { type: 'CVaR', lvl: '95' }, 'Medida de riesgo de la cartera'), v => v.mkOn)
         ]
       },
       {
@@ -2390,6 +2480,7 @@ const P = (function () {
       if (d < 0) throw new Error('La franquicia no puede ser negativa.');
       if (L !== null && !(L > 0)) throw new Error('La indemnización máxima por siniestro debe ser positiva.');
       if (F !== null && !(F > 0)) throw new Error('La indemnización máxima anual debe ser positiva.');
+      const Dg = V.nOpt('Dg'); if (Dg !== null && !(Dg > 0)) throw new Error('La franquicia anual debe ser positiva.');
       const sp = P.buildMeas(V, 'm_'); const A = V.n('A'), B = V.n('B');
       const mc = V.b('mc') ? { n: Math.min(2e6, Math.round(V.n('mcn', { pos: 1 }))), seed: Math.round(V.n('seed')) } : null;
       const r = T.compound({ freq: Nb.D, sev: Sb.D, d, L, F, mc });
@@ -2402,8 +2493,9 @@ const P = (function () {
       R.tile('IP(pérdida) = IP(y > Π)', ploss, { hint: 'probabilidad de que la compañía pierda dinero' }).tile('IP(y = 0)', p0, { hint: 'se queda con el 100 % de la prima' });
       R.key('E', Ey).key('sd', sdy).key('rho', rho).key('prima', Pi).key('riesgo', rho - Pi).key('ploss', ploss).key('p0', p0);
       if (sp.type === 'CVaR') { const va = D.VaR(sp.mu); R.tiles.splice(3, 0, { l: `VaR<sub>${level(sp)}</sub>(−y)`, v: va }); R.key('var', va); }
-      R.uses(Nb.fam === 'poisson' ? 'pois' : 'nb24');
+      R.uses(Nb.fam === 'poisson' ? 'pois' : Nb.fam === 'binneg' || Nb.fam === 'geometrica' ? 'nb24' : null);
       if (Nb.mode === 'pg') R.uses('pg29');
+      if (Sb.fam === 'mixtura') R.uses('mixt27');
       if (Sb.fam === 'lognormal') R.uses('ln67'); if (Sb.fam === 'gamma' || Sb.fam === 'exponencial') R.uses('gam12');
       R.uses('comp26'); if (d > 0 || L !== null || F !== null) R.uses('franq');
 
@@ -2435,7 +2527,7 @@ const P = (function () {
         R.uses(MK(sp.type)); if (r.unit && !(Nb.D.ab && F === null)) R.uses('panjer65');
         R.ans(`${RN}.`, `No existe fórmula cerrada para la distribución de y, así que hay que recurrir a métodos numéricos (método de Panjer tras discretizar la severidad, o simulación de Monte Carlo). Se obtiene ${RN} = ${vv(rho)}${sp.type === 'CVaR' ? ` (con VaR<sub>${level(sp)}</sub>(−y) = ${vv(D.VaR(sp.mu))})` : ''}.`);
         R.uses('mc72');
-        R.ans('Modelo de simulación (si lo piden).', `Paso 1: generar una realización de N (${Nb.fam === 'poisson' ? 'Poisson' : Nb.fam === 'tabla' ? 'según su tabla' : 'binomial negativa'}). Paso 2: si N = 0, y = 0. Paso 3: si N > 0, generar S₁, …, S<sub>N</sub> independientes${Sb.fam === 'lognormal' ? ' (S = e<sup>m+sZ</sup>, Z ∼ N(0,1))' : Sb.fam === 'exponencial' ? ' (S = −β·log(1 − U), U uniforme)' : ''}${mods ? ' y aplicar ' + (d > 0 ? `la franquicia (S − ${f(d)})<sup>+</sup>` : '') + (d > 0 && L !== null ? ' y ' : '') + (L !== null ? `el límite min{·, ${f(L)}}` : '') : ''}, y tomar y = Σ Sᵢ${F !== null ? `, min{y, ${f(F)}}` : ''}. Paso 4: repetir M veces (p. ej. 100.000). Con la muestra ordenada, 𝔼(y) y σ(y) son la media y la desviación muestrales, el VaR es el percentil y el CVaR es la media de los ${sp.mu ? T.fmtPctLevel(sp.mu) : 'μ%'} peores valores (§7.2).`);
+        R.ans('Modelo de simulación (si lo piden).', `Paso 1: generar una realización de N (${Nb.fam === 'poisson' ? 'Poisson' : Nb.fam === 'tabla' ? 'según su tabla' : 'binomial negativa'}). Paso 2: si N = 0, y = 0. Paso 3: si N > 0, generar S₁, …, S<sub>N</sub> independientes${Sb.fam === 'mixtura' ? ' (para cada siniestro se elige primero su tipo con sus probabilidades y después se genera su severidad, p. ej. log-normal S = e<sup>m+sZ</sup>)' : Sb.fam === 'lognormal' ? ' (S = e<sup>m+sZ</sup>, Z ∼ N(0,1))' : Sb.fam === 'exponencial' ? ' (S = −β·log(1 − U), U uniforme)' : ''}${mods ? ' y aplicar ' + (d > 0 ? `la franquicia (S − ${f(d)})<sup>+</sup>` : '') + (d > 0 && L !== null ? ' y ' : '') + (L !== null ? `el límite min{·, ${f(L)}}` : '') : ''}, y tomar y = Σ Sᵢ${F !== null ? `, min{y, ${f(F)}}` : ''}. Paso 4: repetir M veces (p. ej. 100.000). Con la muestra ordenada, 𝔼(y) y σ(y) son la media y la desviación muestrales, el VaR es el percentil y el CVaR es la media de los ${sp.type === 'CVaR' ? T.fmtPctLevel(sp.mu) : 'μ·M'} peores valores (§7.2)${['SW', 'SDPT', 'Wang', 'DPT'].includes(sp.type) ? '; las medidas espectrales y de distorsión se estiman ponderando los valores ordenados con su función de pesos' : ''}.`);
         if (A !== 1 || B !== 0) {
           R.uses('prima66');
           R.ans('Prima.', `Π(y) = ${f(A)}·𝔼(y) + ${f(B)}·${RN} = ${f(A)} × ${f(Ey)} + ${f(B)} × ${f(rho)} = ${vv(Pi)}.`);
@@ -2454,6 +2546,36 @@ const P = (function () {
         R.key('prima2', P2).key('ploss2', pl2);
         R.step('Segunda prima Π₂', eq(`Π₂(y) = ${f(a2)}·𝔼(y)${b2 ? ` + ${f(b2)}·${RN}` : ''} = ${f(a2)} × ${f(Ey)}${b2 ? ` + ${f(b2)} × ${f(rho)}` : ''} = ${vv(P2)}`) + eq(`IP(y > Π₂) = ${vv(pl2)}`));
         R.ans('Segunda prima.', `Con el segundo principio, Π₂(y) = ${f(a2)} × ${f(Ey)}${b2 ? ` + ${f(b2)} × ${f(rho)}` : ''} = ${vv(P2)}, y la probabilidad de que la compañía pierda dinero es IP(y > ${f(P2)}) = ${vv(pl2)}.`);
+      }
+      // ── Otras medidas y franquicia sobre el coste anual (y − D)⁺ ──
+      const extra = parseMeasList(V.s('extra'));
+      let Zd = null;
+      if (Dg !== null) {
+        Zd = T.makeDisc(Array.from(D.xs, x => Math.max(x - Dg, 0)), Array.from(D.ps));
+        Zd.VaR = mu => Math.max(D.VaR(mu) - Dg, 0);
+        Zd.CVaR = mu => { if (mu >= 1) return Zd.mean; const v = D.VaR(mu); return Math.max(v - Dg, 0) + D.SL(Math.max(v, Dg)) / mu; };
+        Zd.CVaRz = z => Zd.CVaR(T.Phi(z));
+      }
+      const lossF = V.nOpt('lossF');
+      if (extra.length) {
+        R.table(`Medidas de riesgo${Zd ? ' sin y con franquicia anual' : ''}`, ['Medida', 'De y', ...(Zd ? [`De (y − ${f(Dg)})<sup>+</sup>`] : [])], extra.map(e => [rn(e), T.risk(D, e), ...(Zd ? [T.risk(Zd, e)] : [])]), { top: true });
+        extra.forEach((e, i) => { R.key('x' + (i + 1), T.risk(D, e)); if (Zd) R.key('xz' + (i + 1), T.risk(Zd, e)); });
+        R.uses(...extra.map(e => MK(e.type)));
+        R.ans('Medidas de riesgo.', `Sobre la distribución de y (${r.unit ? 'exacta' : 'obtenida numéricamente'}): ${extra.map(e => `${rn(e)} = ${vv(T.risk(D, e))}`).join('; ')}.`);
+      }
+      if (lossF !== null) {
+        const pl = D.sf((1 + lossF) * Pi); R.tile(`IP(pérdidas > ${f(lossF)}·Π)`, pl); R.key('plossF', pl);
+        R.ans(`Pérdidas superiores al ${pct(lossF)} de la prima.`, `Las pérdidas son y − Π; superan ${f(lossF)}·Π si y > ${f(1 + lossF)} × ${f(Pi)} = ${f((1 + lossF) * Pi)}, lo que ocurre con probabilidad IP(y > ${f((1 + lossF) * Pi)}) = ${vv(pl)}.`);
+      }
+      if (Zd) {
+        const Ez = Zd.mean, sdz = Zd.sd, rz = T.risk(Zd, sp), Pz = A * Ez + B * rz, plz = Zd.sf(Pz);
+        R.tile(`𝔼((y − ${f(Dg)})<sup>+</sup>)`, Ez, { main: true }).tile(`σ((y − ${f(Dg)})<sup>+</sup>)`, sdz).tile(`${rn(sp, '−(y − ' + f(Dg) + ')<sup>+</sup>')}`, rz).tile('Prima con franquicia anual', Pz, { main: true }).tile('IP(pérdida) con franquicia', plz);
+        R.key('Ez', Ez).key('sdz', sdz).key('rhoz', rz).key('primaz', Pz).key('plossz', plz);
+        R.step(`Franquicia sobre el coste anual: z = (y − ${f(Dg)})<sup>+</sup>`, `La compañía sólo paga el exceso del coste anual sobre ${f(Dg)}. Como z es función no decreciente de y, VaR(−z) = (VaR(−y) − D)<sup>+</sup> y CVaR<sub>1−μ</sub>(−z) = (VaR − D)<sup>+</sup> + 𝔼((y − max{VaR, D})<sup>+</sup>)/μ:` +
+          eq(`𝔼(z) = 𝔼((y − ${f(Dg)})<sup>+</sup>) = ${vv(Ez)}; &nbsp; σ(z) = ${vv(sdz)}; &nbsp; IP(z = 0) = IP(y ≤ ${f(Dg)}) = ${vv(D.cdf(Dg))}`) +
+          eq(`${rn(sp, '−z')} = ${vv(rz)}; &nbsp; Π(z) = ${f(A)} × ${f(Ez)} + ${f(B)} × ${f(rz)} = ${vv(Pz)}; &nbsp; IP(z > Π) = ${vv(plz)}`));
+        R.ans(`Con franquicia anual de ${f(Dg)}.`, `Con la franquicia la compañía paga z = (y − ${f(Dg)})<sup>+</sup>. Su esperanza es 𝔼((y − ${f(Dg)})<sup>+</sup>) = ${vv(Ez)} y su desviación ${vv(sdz)}; ${rn(sp, '−z')} = ${vv(rz)}${extra.length ? `; además ${extra.map(e => `${rn(e, '−z')} = ${vv(T.risk(Zd, e))}`).join(', ')}` : ''}. La prima es Π(z) = ${f(A)} × ${f(Ez)} + ${f(B)} × ${f(rz)} = ${vv(Pz)} (frente a ${f(Pi)} sin franquicia) y la probabilidad de pérdidas es IP(z > ${f(Pz)}) = ${vv(plz)}${lossF !== null ? `; la de que las pérdidas superen el ${pct(lossF)} de la prima, IP(z > ${f((1 + lossF) * Pz)}) = ${vv(Zd.sf((1 + lossF) * Pz))}` : ''}.`);
+        if (lossF !== null) R.key('plossFz', Zd.sf((1 + lossF) * Pz));
       }
       // Relación entre k1 y k2 para reproducir la prima
       if ((A !== 1 || B !== 0) && rho > 0) {
@@ -2548,16 +2670,16 @@ const P = (function () {
       // Cartera de n pólizas
       const n = V.nOpt('n'), eN0 = V.nOpt('epsN');
       if (n !== null || eN0 !== null) {
-        const r01 = T.rhoStd(sp);
+        const spK = V.b('mkOn') ? P.buildMeas(V, 'mk_') : sp, r01 = T.rhoStd(spK);
         R.uses('tcl61', 'norm45');
         let html = 'Por el Teorema Central del Límite, la cartera de n pólizas independientes es aproximadamente normal (teoría del riesgo individual, tema 6).';
         if (n !== null) {
-          const c = normalCartera(n, Ey, sdy, sp, (A !== 1 || B !== 0) ? Pi : null);
-          html += eq(`Y ∼ N(n𝔼(y); √n σ(y)) = N(${f(c.mN)}; ${f(c.sN)})`) + eq(`${rn(sp, '−Y')} = ${f(c.mN)} + ${f(c.r01)} × ${f(c.sN)} = ${vv(c.rhoN)} &nbsp; (ρ<sub>(0,1)</sub> = ${f(c.r01)})`) +
-            eq(`Prima por póliza = ${rn(sp, '−Y')}/n = ${vv(c.rhoN / n)}; &nbsp; con Π = 𝔼(y) + k·${RN}: k = (${f(c.rhoN / n)} − ${f(Ey)})/${f(rho)} = ${vv((c.rhoN / n - Ey) / rho)}`);
-          R.tile(`${rn(sp, '−Y')} de la cartera`, c.rhoN).tile('Prima por póliza (cartera)', c.rhoN / n);
+          const c = normalCartera(n, Ey, sdy, spK, (A !== 1 || B !== 0) ? Pi : null);
+          html += eq(`Y ∼ N(n𝔼(y); √n σ(y)) = N(${f(c.mN)}; ${f(c.sN)})`) + eq(`${rn(spK, '−Y')} = ${f(c.mN)} + ${f(c.r01)} × ${f(c.sN)} = ${vv(c.rhoN)} &nbsp; (ρ<sub>(0,1)</sub> = ${f(c.r01)})`) +
+            eq(`Prima por póliza = ${rn(spK, '−Y')}/n = ${vv(c.rhoN / n)}; &nbsp; con Π = 𝔼(y) + k·${RN}: k = (${f(c.rhoN / n)} − ${f(Ey)})/${f(rho)} = ${vv((c.rhoN / n - Ey) / rho)}`);
+          R.tile(`${rn(spK, '−Y')} de la cartera`, c.rhoN).tile('Prima por póliza (cartera)', c.rhoN / n);
           R.key('rhoCart', c.rhoN).key('kEq', (c.rhoN / n - Ey) / rho);
-          R.ans(`Cartera de ${f(n)} pólizas.`, `La cartera se puede aproximar por una normal de media ${f(Ey)} × ${f(n)} = ${f(c.mN)} y desviación ${f(sdy)} × √${f(n)} = ${f(c.sN)}. Por tanto ${rn(sp, '−Y')} = ${f(c.mN)} + ${f(c.r01)} × ${f(c.sN)} = ${vv(c.rhoN)}, donde ${f(c.r01)} es el riesgo de la normal estándar. La prima de toda la cartera es ${f(c.rhoN)}, es decir, ${vv(c.rhoN / n)} por póliza; de ${f(c.rhoN / n)} = ${f(Ey)} + k × ${f(rho)} se obtiene k = ${vv((c.rhoN / n - Ey) / rho)}.`);
+          R.ans(`Cartera de ${f(n)} pólizas.`, `La cartera se puede aproximar por una normal de media ${f(Ey)} × ${f(n)} = ${f(c.mN)} y desviación ${f(sdy)} × √${f(n)} = ${f(c.sN)}. Por tanto ${rn(spK, '−Y')} = ${f(c.mN)} + ${f(c.r01)} × ${f(c.sN)} = ${vv(c.rhoN)}, donde ${f(c.r01)} es el riesgo de la normal estándar. La prima de toda la cartera es ${f(c.rhoN)}, es decir, ${vv(c.rhoN / n)} por póliza; de ${f(c.rhoN / n)} = ${f(Ey)} + k × ${f(rho)} se obtiene k = ${vv((c.rhoN / n - Ey) / rho)}.`);
           if (c.ploss !== null) {
             html += eq(`IP(pérdida de la cartera) = IP(Y > nΠ) = 1 − Φ(√n(Π − 𝔼(y))/σ(y)) = 1 − Φ(${f(Math.sqrt(n) * (Pi - Ey) / sdy, 8)}) = ${vv(c.ploss)}`);
             R.tile('IP(pérdida) de la cartera', c.ploss);
@@ -2571,23 +2693,55 @@ const P = (function () {
           else {
             const z = T.PhiInv(1 - eN), n1 = Math.ceil((sdy * z / (Pi - Ey)) ** 2 - 1e-9), n2 = Math.ceil((sdy * r01 / (Pi - Ey)) ** 2 - 1e-9);
             html += eq(`IP(pérdida) = 1 − Φ(√n(Π − 𝔼)/σ) ≤ ${pct(eN)} ⇔ √n ≥ σ·Φ<sup>−1</sup>(${f(1 - eN)})/(Π − 𝔼) = ${f(sdy)} × ${f(z, 8)}/${f(Pi - Ey)} ⇒ n ≥ ${f((sdy * z / (Pi - Ey)) ** 2)} ⇒ <b>n = ${n1}</b>`) +
-              eq(`${rn(sp, 'nΠ − Y')} = n𝔼 + √n σ ρ<sub>(0,1)</sub> − nΠ ≤ 0 ⇔ √n ≥ σρ<sub>(0,1)</sub>/(Π − 𝔼) = ${f(sdy)} × ${f(r01)}/${f(Pi - Ey)} ⇒ n ≥ ${f((sdy * r01 / (Pi - Ey)) ** 2)} ⇒ <b>n = ${n2}</b>`);
-            R.tile(`n mínimo con IP(pérdida) ≤ ${pct(eN)}`, String(n1)).tile(`n mínimo con ${rn(sp, 'nΠ − Y')} ≤ 0`, String(n2));
+              eq(`${rn(spK, 'nΠ − Y')} = n𝔼 + √n σ ρ<sub>(0,1)</sub> − nΠ ≤ 0 ⇔ √n ≥ σρ<sub>(0,1)</sub>/(Π − 𝔼) = ${f(sdy)} × ${f(r01)}/${f(Pi - Ey)} ⇒ n ≥ ${f((sdy * r01 / (Pi - Ey)) ** 2)} ⇒ <b>n = ${n2}</b>`);
+            R.tile(`n mínimo con IP(pérdida) ≤ ${pct(eN)}`, String(n1)).tile(`n mínimo con ${rn(spK, 'nΠ − Y')} ≤ 0`, String(n2));
             R.key('nP', n1).key('nR', n2);
-            R.ans('Número mínimo de pólizas.', `Con n pólizas la siniestralidad es aproximadamente N(n𝔼(y); √n σ(y)). La compañía pierde dinero con probabilidad 1 − Φ(√n(Π − 𝔼(y))/σ(y)) ≤ ${pct(eN)} si √n ≥ ${f(sdy)} × ${f(z, 8)}/${f(Pi - Ey)}, es decir, n ≥ ${f((sdy * z / (Pi - Ey)) ** 2)}: el mínimo es <b>n = ${n1}</b>. Para que ${rn(sp, 'nΠ − Y')} = n(𝔼(y) − Π) + √n σ(y)·${f(r01)} ≤ 0 hace falta n ≥ ${f((sdy * r01 / (Pi - Ey)) ** 2)}: el mínimo es <b>n = ${n2}</b>.`);
+            R.ans('Número mínimo de pólizas.', `Con n pólizas la siniestralidad es aproximadamente N(n𝔼(y); √n σ(y)). La compañía pierde dinero con probabilidad 1 − Φ(√n(Π − 𝔼(y))/σ(y)) ≤ ${pct(eN)} si √n ≥ ${f(sdy)} × ${f(z, 8)}/${f(Pi - Ey)}, es decir, n ≥ ${f((sdy * z / (Pi - Ey)) ** 2)}: el mínimo es <b>n = ${n1}</b>. Para que ${rn(spK, 'nΠ − Y')} = n(𝔼(y) − Π) + √n σ(y)·${f(r01)} ≤ 0 hace falta n ≥ ${f((sdy * r01 / (Pi - Ey)) ** 2)}: el mínimo es <b>n = ${n2}</b>.`);
           }
+        }
+        // Parte de la cartera con franquicia anual y riesgo colectivo exacto
+        if (n !== null) {
+          const nD = V.nOpt('nD') || 0;
+          if (nD && !Zd) throw new Error('Para «De ellas, con la franquicia anual» indica la franquicia anual D.');
+          if (nD < 0 || nD > n) throw new Error('El nº de pólizas con franquicia debe estar entre 0 y n.');
+          const n0 = n - nD, mI = n0 * Ey + (nD ? nD * Zd.mean : 0), sI = Math.sqrt(n0 * sdy * sdy + (nD ? nD * Zd.var : 0)), rI = spK.type === 'Entropica' ? mI + spK.mu * sI * sI / 2 : mI + r01 * sI;
+          if (nD) {
+            R.tile('Prima de la cartera mixta', rI, { main: true }); R.key('rhoMix', rI);
+            const k1 = rI / mI - 1;
+            html += eq(`${f(n0)} pólizas sin franquicia y ${f(nD)} con ella: m = ${f(n0)} × ${f(Ey)} + ${f(nD)} × ${f(Zd.mean)} = ${f(mI)}; s = √(${f(n0)} × ${f(sdy)}² + ${f(nD)} × ${f(Zd.sd)}²) = ${f(sI)}`) + eq(`${rn(spK, '−Y')} = ${f(mI)} + ${f(r01)} × ${f(sI)} = ${vv(rI)}`);
+            R.ans('Cartera con la mitad de pólizas con franquicia.', `Con ${f(n0)} pólizas sin franquicia (𝔼 = ${f(Ey)}, σ = ${f(sdy)}) y ${f(nD)} con franquicia (𝔼 = ${f(Zd.mean)}, σ = ${f(Zd.sd)}), la cartera es aproximadamente normal de media ${f(mI)} y desviación ${f(sI)}, luego hay que cobrar ${rn(spK, '−Y')} = ${f(mI)} + ${f(r01)} × ${f(sI)} = ${vv(rI)}. Con el recargo de seguridad máximo k₁ = ${vv(k1)} (k₂ = 0), cada asegurado sin franquicia paga ${f(Ey)} × ${f(1 + k1)} = ${vv(Ey * (1 + k1))} y cada uno con franquicia ${f(Zd.mean)} × ${f(1 + k1)} = ${vv(Zd.mean * (1 + k1))}. (Para repartir con k₂ usa «Recargos» con dos filas: 𝔼, σ y riesgo de cada tipo de póliza.)`);
+          }
+          if (V.b('colOn')) {
+            const parts = [{ dist: D, n: n0 }]; if (nD) parts.push({ dist: Zd, n: nD });
+            const Y = T.sumIID(parts), rC = T.risk(Y, spK), dif = (rC - rI) / rI;
+            R.tile(`${rn(spK, '−Y')} (riesgo colectivo)`, rC, { main: true }).tile('Prima por póliza (colectivo)', rC / n);
+            R.key('rhoCol', rC).key('difCol', dif);
+            R.table('Riesgo individual (normal) frente a riesgo colectivo (distribución exacta de la cartera)', ['', 'Individual (normal)', 'Colectivo (exacto)'],
+              [['𝔼(Y)', mI, Y.mean], ['σ(Y)', sI, Y.sd], [rn(spK, '−Y') + ' = prima de la cartera', rI, rC], ['Prima media por póliza', rI / n, rC / n]], { top: true });
+            html += eq(`Riesgo colectivo: la distribución de Y = suma de las ${f(n)} pólizas se obtiene exactamente elevando la función característica de cada póliza a su nº de pólizas (FFT) ⇒ ${rn(spK, '−Y')} = ${vv(rC)} (${dif >= 0 ? '+' : '−'}${pct(Math.abs(dif))} respecto de la normal)`);
+            R.ans('Riesgo colectivo y comparación.', `Si en lugar de aproximar por la normal se obtiene la distribución de la cartera a partir de la de cada póliza (riesgo colectivo), ${rn(spK, '−Y')} = ${vv(rC)}, frente a ${f(rI)} con la teoría del riesgo individual (${dif >= 0 ? 'un ' + pct(dif) + ' más' : 'un ' + pct(-dif) + ' menos'}). Ambos enfoques deberían coincidir, pero la convergencia a la normal (TCL) es sólo en el límite: con ${f(n)} pólizas aún queda algo de asimetría${Sb.D.heavy ? ' (la severidad tiene cola pesada)' : ''}, que la normal ignora; si además se simula, hay error de Monte Carlo. Por prudencia se suele cobrar la prima mayor${rC >= rI ? ', la del riesgo colectivo' : ''}.`);
+          }
+          R.ans('Modelo de simulación de la cartera (si lo piden).', `Se simulan muchos costes anuales de una póliza (p. ej. 1.000.000) como en el modelo anterior${nD ? ', sin y con franquicia' : ''}; después se eligen al azar ${f(n)} de esos valores${nD ? ` (${f(nD)} de la muestra con franquicia)` : ''} y se suman, y se repite la operación (p. ej. 10.000 veces). La muestra de sumas es una muestra del coste de la cartera: su histograma y un test de normalidad dicen si se puede aplicar la teoría del riesgo individual, y su percentil y la media de su cola dan el VaR y el CVaR de la cartera.`);
         }
         R.step('Cartera de n pólizas independientes', html);
       }
       if (r.mcDist) {
         const M = r.mcDist, rm = T.risk(M, sp), Pm = A * M.mean + B * rm;
         R.table('Distribución exacta frente a Monte Carlo', ['Magnitud', 'Exacta (discretización)', `Monte Carlo (${f(mc.n)} sim., semilla ${mc.seed})`], [
-          ['𝔼(y)', Ey, M.mean], ['σ(y)', sdy, M.sd], [RN, rho, rm], ['Π(y)', Pi, Pm], ['IP(y > Π)', ploss, M.sf(Pm)]]);
+          ['𝔼(y)', Ey, M.mean], ['σ(y)', sdy, M.sd], [RN, rho, rm], ['Π(y)', Pi, Pm], ['IP(y > Π)', ploss, M.sf(Pm)], ...extra.map(e => [rn(e), T.risk(D, e), T.risk(M, e)]),
+          ...(Zd ? (() => { const Mz = M.map(x => Math.max(x - Dg, 0)), rmz = T.risk(Mz, sp); return [[`𝔼((y − ${f(Dg)})<sup>+</sup>)`, Zd.mean, Mz.mean], [`σ((y − ${f(Dg)})<sup>+</sup>)`, Zd.sd, Mz.sd], [rn(sp, '−z'), T.risk(Zd, sp), rmz], ...extra.map(e => [rn(e, '−z'), T.risk(Zd, e), T.risk(Mz, e)])]; })() : [])]);
+        R.ans('Por simulación (Monte Carlo).', `Procediendo por ${f(mc.n)} simulaciones de Monte Carlo se obtiene 𝔼(y) ≈ ${f(M.mean)}, σ(y) ≈ ${f(M.sd)} y ${RN} ≈ ${f(rm)}${extra.length ? ', ' + extra.map(e => `${rn(e)} ≈ ${f(T.risk(M, e))}`).join(', ') : ''}, de donde Π(y) ≈ ${f(Pm)}. (Valores exactos: ${f(Ey)}, ${f(sdy)} y ${f(rho)}.)`);
         R.note('Monte Carlo cambia con la semilla: diferencias del 1 % en el CVaR son normales. Por eso los valores del examen (simulados) no coinciden exactamente con los exactos.');
       }
       return R;
     },
     examples: [
+      { id: 'nov10-ag', label: 'Clase 10 nov. 2026 · a)–g), k)–l) · N ∈ {0…4}, severidad leve/moderada/grave (log-normales), franquicia anual 5, cartera de 5.000', values: { N_fam: 'tabla', N_tx: '0; 1; 2; 3; 4', N_tp: '0,4; 0,2; 0,2; 0,1; 0,1', S_fam: 'mixtura', S_mx: [{ nom: 'Leve', p: '0,8', fam: 'lognormal', E: '1', sd: '0,5' }, { nom: 'Moderado', p: '0,15', fam: 'lognormal', E: '3', sd: '2' }, { nom: 'Grave', p: '0,05', fam: 'lognormal', E: '10', sd: '10' }], m_rho: 'SW', m_a: '1', A: '1,1', B: '0,1', extra: 'VaR 95; CVaR 95; SW 1', Dg: '5', lossF: '0,85', n: '5000', colOn: true, mkOn: true, mk_rho: 'CVaR', mk_lvl: '95' },
+        expect: [{ k: 'E', l: '𝔼(y)', v: 2.275, src: 'analítico' }, { k: 'sd', l: 'σ(y)', v: 4.289157842747222 }, { k: 'x2', l: 'CVaR<sub>95%</sub>(−y)', v: 15.819965325458567, src: '1.000.000 sim.' }, { k: 'Ez', l: '𝔼((y − 5)<sup>+</sup>)', v: 0.6368078762429434, src: 'simulado' }, { k: 'sdz', l: 'σ((y − 5)<sup>+</sup>)', v: 3.30753588354234, src: 'simulado' }, { k: 'rhoCart', l: 'Prima de la cartera (riesgo individual)', v: 11873.86644, src: 'solución (usa ρ(0,1) = 1,6449, el del VaR)' }, { k: 'rhoCol', l: 'Prima de la cartera (riesgo colectivo)', v: 12041.28381, src: 'simulado' }],
+        note: 'Ejercicio de clase (no es de examen). <b>Posible errata en g):</b> la solución usa ρ(0,1) = 1,6449, que es el de VaR<sub>95%</sub>, aunque el enunciado pide CVaR<sub>95%</sub> (ρ(0,1) = 2,0627). Con el CVaR la prima de la cartera sale ≈ 12.000,6 y el riesgo colectivo exacto ≈ 12.018, muy cerca de su 12.041 simulado. Los momentos con franquicia y los CVaR de la solución están simulados.' },
+      { id: 'nov10-j', label: 'Clase 10 nov. 2026 · j)–l) · la mitad de las 5.000 pólizas con franquicia anual 5', values: { N_fam: 'tabla', N_tx: '0; 1; 2; 3; 4', N_tp: '0,4; 0,2; 0,2; 0,1; 0,1', S_fam: 'mixtura', S_mx: [{ nom: 'Leve', p: '0,8', fam: 'lognormal', E: '1', sd: '0,5' }, { nom: 'Moderado', p: '0,15', fam: 'lognormal', E: '3', sd: '2' }, { nom: 'Grave', p: '0,05', fam: 'lognormal', E: '10', sd: '10' }], m_rho: 'SW', m_a: '1', A: '1,1', B: '0,1', extra: 'VaR 95; CVaR 95; SW 1', Dg: '5', lossF: '0,85', n: '5000', colOn: true, mkOn: true, mk_rho: 'CVaR', mk_lvl: '95', nD: '2500' },
+        expect: [{ k: 'rhoMix', l: 'Prima de la cartera (individual)', v: 7724.973481, src: 'solución (con ρ(0,1) del VaR)' }, { k: 'rhoCol', l: 'Prima de la cartera (colectivo)', v: 7871.248224, src: 'simulado' }],
+        note: 'Misma errata que en g): la solución usa el ρ(0,1) del VaR<sub>95%</sub>.' },
       { id: 'e16-3', label: 'Enero 2016 · Ej. 3 · BN(3; 0,5), exponencial(1000), CVaR 80 %, ganar ≥ ½ prima (y con N ≤ 1)', values: { N_fam: 'binneg', N_binneg_mode: 'p', N_binneg_p_a: '3', N_binneg_p_th: '0,5', S_fam: 'exponencial', S_exponencial_p_b: '1000', m_rho: 'CVaR', m_lvl: '80', A: '1,05', B: '0,1', gfrac: '0,5', ncond: '1' } },
       { id: 'e15-2b', label: 'Enero 2015 · Ej. 2 · BN de media 2 y varianza 10, gamma(100; 5000), Π₁ = 1,1𝔼 y Π₂ con CVaR 90 %', values: { N_fam: 'binneg', N_binneg_mode: 'mv', N_binneg_mv_E: '2', N_binneg_mv_V: '10', S_fam: 'gamma', S_gamma_mode: 'mom', S_gamma_mom_E: '100', S_gamma_mom_sd: 'sqrt(5000)', m_rho: 'CVaR', m_lvl: '90', A: '1,05', B: '0,05', A2: '1,1', B2: '0' } },
       { id: 'e14-3c', label: 'Enero 2014 · Ej. 3 · Poisson(2), severidad 100–400 equiprobable, Panjer hasta IP(y > U) ≤ 0,3, VaR 70 %, PPVE 10 %', values: { N_fam: 'poisson', N_poisson_p_lam: '2', S_fam: 'discreta', S_dx: '100; 200; 300; 400', S_dp: '0,25; 0,25; 0,25; 0,25', m_rho: 'VaR', m_lvl: '70', A: '1,05', B: '0,05', A2: '1,1', B2: '0', panjP: '0,3' } },
@@ -3148,13 +3302,14 @@ const P = (function () {
   });
 
   /* ═════════ T5 · Reaseguro ═════════ */
-  function treatyAnalysis(src, sp, tr0, tipo, k1r, k2r, R0, idx, R) {
+  function treatyAnalysis(src, sp, tr0, tipo, k1r, k2r, R0, idx, R, spR0) {
+    const spR = spR0 || sp, otraR = !!spR0;
     const D = src.D, EY = D.mean, rhoY = T.risk(D, sp);
     const yr = tipo === 'r' ? tr0 : T.plComplement(tr0), yc = tipo === 'r' ? T.plComplement(tr0) : tr0;
     const slopes = T.plSlopes(yc);
     const como = slopes.every(s => s.slope >= -1e-12 && s.slope <= 1 + 1e-12);
     const C = T.transformDist(D, yc), Rr = T.transformDist(D, yr);
-    const Eyc = C.mean, rhoc = T.risk(C, sp), Pr = (1 + k1r) * Eyc + k2r * rhoc, net = Pr - rhoc;
+    const Eyc = C.mean, rhoc = T.risk(C, sp), rhocR = otraR ? T.risk(C, spR) : rhoc, Pr = (1 + k1r) * Eyc + k2r * rhocR, net = Pr - rhoc;
     const Eyr = EY - Eyc, rhor = T.risk(Rr, sp), prima = rhoY - R0 + net;
     const add = T.comonotoneAdditive(sp) && como;
     const lab = `y<sub>c</sub> = ${T.treatyToString(yc)}`;
@@ -3177,7 +3332,8 @@ const P = (function () {
     if (add && comps.length > 1) {
       const pc = comps.map(c => {
         const E1 = c.U === null ? EY : D.SL(c.U), r1 = c.U === null ? rhoY : T.layerRisk(D, sp, c.U);
-        return { c, E1, r1, P: c.a * ((1 + k1r) * E1 + k2r * r1) };
+        const r1R = otraR ? (c.U === null ? T.risk(D, spR) : T.layerRisk(D, spR, c.U)) : r1;
+        return { c, E1, r1, P: c.a * ((1 + k1r) * E1 + k2r * r1R) };
       });
       const nm = c => c.U === null ? 'y' : `(y − ${f(c.U)})<sup>+</sup>`;
       R.table(`Tratado ${idx}: precio de cada componente del reaseguro`, ['Componente', 'Peso aᵢ', '𝔼', rn(sp, '−·'), 'Precio aᵢ[(1+k₁)𝔼 + k₂ρ]'], pc.map(x => [nm(x.c), x.c.a, x.E1, x.r1, x.P]));
@@ -3190,7 +3346,8 @@ const P = (function () {
     R.step(`Tratado ${idx}: probabilidad de pérdidas para la reaseguradora`, eq(`IP(y<sub>c</sub> > Π<sub>r</sub>) = IP(y<sub>c</sub> > ${f(Pr)}) = ${vv(plr)}`) + (src.normal ? 'Como y<sub>c</sub> es función creciente de y, equivale a IP(y > y<sub>c</sub><sup>−1</sup>(Π<sub>r</sub>)).' : ''));
     R.__plr = (R.__plr || []).concat([plr]);
     R.step(`Tratado ${idx}: prima del reaseguro y prima de la cartera`,
-      eq(`Π<sub>r</sub> = (1 + ${f(k1r)})·𝔼(y<sub>c</sub>)${k2r ? ` + ${f(k2r)}·${rn(sp, '−y<sub>c</sub>')}` : ''} = ${f(1 + k1r)} × ${f(Eyc)}${k2r ? ` + ${f(k2r)} × ${f(rhoc)}` : ''} = ${vv(Pr)}`) +
+      (otraR ? eq(`La reaseguradora mide el riesgo con ${rn(spR, '−y<sub>c</sub>')} = ${vv(rhocR)}`) : '') +
+      eq(`Π<sub>r</sub> = (1 + ${f(k1r)})·𝔼(y<sub>c</sub>)${k2r ? ` + ${f(k2r)}·${rn(spR, '−y<sub>c</sub>')}` : ''} = ${f(1 + k1r)} × ${f(Eyc)}${k2r ? ` + ${f(k2r)} × ${f(rhocR)}` : ''} = ${vv(Pr)}`) +
       eq(`Coste neto del reaseguro: Π<sub>r</sub> − ${rn(sp, '−y<sub>c</sub>')} = ${f(Pr)} − ${f(rhoc)} = ${vv(net)}`) +
       eq(`Prima de la cartera = ${rn(sp)}${R0 ? ' − R₀' : ''} + (Π<sub>r</sub> − ${rn(sp, '−y<sub>c</sub>')}) = ${f(rhoY)}${R0 ? ' − ' + f(R0) : ''} ${net < 0 ? '−' : '+'} ${f(Math.abs(net))} = ${vv(prima)}`) +
       (add ? `Equivalentemente: ${rn(sp, '−y<sub>r</sub>')} + Π<sub>r</sub>${R0 ? ' − R₀' : ''} = ${f(rhor)} + ${f(Pr)}${R0 ? ' − ' + f(R0) : ''} = ${f(rhor + Pr - R0)}.` : '') +
@@ -3207,7 +3364,7 @@ const P = (function () {
       if (src.normal && yc.layers.length) R.uses('slN'); if (add) R.uses('aditiv'); if (src.normal && yc.layers.length && sp.type === 'CVaR') R.uses('cvarslN');
       R.ans(pre + 'Riesgo cedido.', t);
       R.uses('prima71');
-      R.ans(pre + 'Primas.', `La prima a pagar por el reaseguro es Π<sub>r</sub> = ${f(1 + k1r)} × ${f(Eyc)}${k2r ? ` + ${f(k2r)} × ${f(rhoc)}` : ''} = ${vv(Pr)}, así que la prima del reaseguro menos el riesgo cedido es ${f(Pr)} − ${f(rhoc)} = ${vv(net)}. La prima a cobrar por toda la cartera si se compra el reaseguro será ${f(rhoY)}${R0 ? ' − ' + f(R0) : ''} ${net < 0 ? '−' : '+'} ${f(Math.abs(net))} = ${vv(prima)}${add ? ` (equivalentemente, riesgo retenido + prima del reaseguro = ${f(rhor)} + ${f(Pr)})` : ''}. ${prima < rhoY - R0 ? 'El reaseguro abarata la prima de la cartera.' : 'El reaseguro encarece la prima de la cartera.'}`);
+      R.ans(pre + 'Primas.', `${otraR ? `La reaseguradora usa ${rn(spR, '−y<sub>c</sub>')} = ${f(rhocR)}. ` : ''}La prima a pagar por el reaseguro es Π<sub>r</sub> = ${f(1 + k1r)} × ${f(Eyc)}${k2r ? ` + ${f(k2r)} × ${f(rhocR)}` : ''} = ${vv(Pr)}, así que la prima del reaseguro menos el riesgo cedido es ${f(Pr)} − ${f(rhoc)} = ${vv(net)}. La prima a cobrar por toda la cartera si se compra el reaseguro será ${f(rhoY)}${R0 ? ' − ' + f(R0) : ''} ${net < 0 ? '−' : '+'} ${f(Math.abs(net))} = ${vv(prima)}${add ? ` (equivalentemente, riesgo retenido + prima del reaseguro = ${f(rhor)} + ${f(Pr)})` : ''}. ${prima < rhoY - R0 ? 'El reaseguro abarata la prima de la cartera.' : 'El reaseguro encarece la prima de la cartera.'}`);
       if (addAns) { R.uses('aditiv'); addAns(); }
       R.ans(pre + 'Pérdidas de la reaseguradora.', `La reaseguradora pierde dinero si la siniestralidad cedida supera lo que cobra: IP(y<sub>c</sub> > ${f(Pr)}) = ${vv(plr)}.`);
       R.ans(pre + 'Recargos máximos.', `El recargo de seguridad máximo será (${f(prima)} − ${f(EY)})/${f(EY)} = ${vv(prima / EY - 1)}; el recargo máximo por riesgo (con recargo de seguridad nulo) será (${f(prima)} − ${f(EY)})/${f(rhoY)} = ${vv((prima - EY) / rhoY)}, y para un recargo de seguridad igual a −1, ${f(prima)}/${f(rhoY)} = ${vv(prima / rhoY)}.`);
@@ -3236,7 +3393,9 @@ const P = (function () {
       {
         title: 'Principio de prima de la reaseguradora', fields: [
           { id: 'info2', type: 'info', html: 'Π<sub>r</sub> = (1 + k₁<sup>r</sup>)·𝔼(y<sub>c</sub>) + k₂<sup>r</sup>·ρ(−y<sub>c</sub>). PPVE con recargo del 10 %: k₁ = 0,1 y k₂ = 0.' },
-          { id: 'k1', type: 'num', label: 'k₁ʳ (recargo de seguridad)', def: '0,01' }, { id: 'k2', type: 'num', label: 'k₂ʳ (recargo por riesgo)', def: '0,01' }
+          { id: 'k1', type: 'num', label: 'k₁ʳ (recargo de seguridad)', def: '0,01' }, { id: 'k2', type: 'num', label: 'k₂ʳ (recargo por riesgo)', def: '0,01' },
+          { id: 'mrOn', type: 'check', label: 'La reaseguradora usa otra medida (p. ej. 1,01𝔼 + 0,01·VaR₉₅)', def: false, wide: true },
+          ...P.withShow(P.measFields('mr_', { type: 'VaR', lvl: '95' }, 'Medida de la reaseguradora'), v => v.mrOn)
         ]
       }
     ],
@@ -3254,7 +3413,7 @@ const P = (function () {
       R.ans('Cartera.', `${src.normal ? `La siniestralidad de la cartera es normal de media ${f(src.m)} y desviación ${f(src.s)} (teoría del riesgo individual). Con ρ<sub>(0,1)</sub> = ${f(T.rhoStd(sp))}, ${rn(sp)} = ${f(src.m)} + ${f(T.rhoStd(sp))} × ${f(src.s)} = ${vv(rhoY)}` : `${rn(sp)} = ${vv(rhoY)}`}, que sería la prima de la cartera sin reaseguro${R0 ? ' (descontadas las reservas, ' + f(rhoY - R0) + ')' : ''}.`);
       const res = trs.map((t, i) => {
         let tr; try { tr = T.parseTreaty(t.e); } catch (e) { throw new Error(`Tratado ${i + 1}: ${e.message}`); }
-        return treatyAnalysis(src, sp, tr, t.t || 'c', k1, k2, R0, i + 1, R);
+        return treatyAnalysis(src, sp, tr, t.t || 'c', k1, k2, R0, i + 1, R, V.b('mrOn') ? P.buildMeas(V, 'mr_') : null);
       });
       if (res.length === 1) {
         const x = res[0];
@@ -3444,7 +3603,9 @@ const P = (function () {
           { id: 're', type: 'text', label: 'Tratado', def: '0,5(y − 1.600.000)+', wide: true, show: v => v.reOn, help: 'Ej.: 0,2y (cuota-parte con retención del 80 %) · (y − U)+ · tramos: 0:0,2; 425.000:0,6' },
           { id: 'reT', type: 'sel', label: 'La expresión es', def: 'c', opts: [['c', 'el riesgo cedido y_c'], ['r', 'el riesgo retenido y_r']], show: v => v.reOn },
           { id: 'k1r', type: 'num', label: 'k₁ʳ de la reaseguradora', def: '0', show: v => v.reOn },
-          { id: 'k2r', type: 'num', label: 'k₂ʳ de la reaseguradora', def: '0,04', show: v => v.reOn }
+          { id: 'k2r', type: 'num', label: 'k₂ʳ de la reaseguradora', def: '0,04', show: v => v.reOn },
+          { id: 'mrOn', type: 'check', label: 'La reaseguradora usa otra medida (p. ej. 1,01𝔼 + 0,01·VaR₉₅)', def: false, wide: true, show: v => v.reOn },
+          ...P.withShow(P.measFields('mr_', { type: 'VaR', lvl: '95' }, 'Medida de la reaseguradora'), v => v.reOn && v.mrOn)
         ]
       },
       {
@@ -3552,7 +3713,10 @@ const P = (function () {
         // Con medida comonótona aditiva y tratado comonótono: ρ(−y_c) = a₀ρ(−y) + Σ aᵢρ(−(y − Uᵢ)⁺), usando el ρ(0,1) indicado para la parte proporcional
         const addv = T.comonotoneAdditive(sp) && T.plSlopes(yc).every(x => x.slope >= -1e-12 && x.slope <= 1 + 1e-12);
         const rhoc = addv ? yc.a0 * rho + yc.layers.reduce((a, l) => a + l.a * T.layerRisk(D, sp, l.U), 0) : T.risk(C, sp);
-        const Eyc = C.mean, PR = (1 + k1r) * Eyc + k2r * rhoc, rhor = addv ? rho - rhoc : T.risk(Rr, sp);
+        const spR = V.b('mrOn') ? P.buildMeas(V, 'mr_') : sp, otraR = V.b('mrOn');
+        const rhocR = otraR ? T.risk(C, spR) : rhoc;
+        const Eyc = C.mean, PR = (1 + k1r) * Eyc + k2r * rhocR, rhor = addv ? rho - rhoc : T.risk(Rr, sp);
+        if (otraR) R.key('rhocR', rhocR);
         const shift = (PR - rhoc) / rho, Pt = P0 + PR - rhoc, e1 = ext(Pt);
         const conv = PR < rhoc;
         R.tile('Precio del reaseguro Π<sub>R</sub>', PR).tile('Prima de la cartera con reaseguro', Pt, { main: true }).tile('k₁ máx. con reaseguro', e1.k1).tile('k₂ máx. con reaseguro', e1.k2);
@@ -3560,12 +3724,13 @@ const P = (function () {
         R.step('Reaseguro: riesgo cedido y precio', eq(`y<sub>c</sub> = ${T.treatyToString(yc)}; &nbsp; y<sub>r</sub> = ${T.treatyToString(yr)}`) +
           yc.layers.map(l => eq(P.slFormula({ D, normal: true, m, s }, l.U))).join('') +
           eq(`𝔼(y<sub>c</sub>) = ${vv(Eyc)}; &nbsp; ${rn(sp, '−y<sub>c</sub>')} = ${vv(rhoc)}`) +
-          eq(`Π<sub>R</sub> = (1 + ${f(k1r)})·${f(Eyc)} + ${f(k2r)}·${f(rhoc)} = ${vv(PR)}`));
+          (otraR ? eq(`La reaseguradora usa ${rn(spR, '−y<sub>c</sub>')} = ${vv(rhocR)}`) : '') +
+          eq(`Π<sub>R</sub> = (1 + ${f(k1r)})·${f(Eyc)} + ${f(k2r)}·${f(rhocR)} = ${vv(PR)}`));
         R.step('Nueva relación de recargos (ec. 78)', eq(`(Π<sub>R</sub> − ${rn(sp, '−y<sub>c</sub>')})/${rn(sp)} = (${f(PR)} − ${f(rhoc)})/${f(rho)} = ${vv(shift)}`) +
           eq(relTxt(shift)) + eq(`k₂ = 0 ⇒ k₁ = ${vv(e1.k1)}; &nbsp; k₁ = 0 ⇒ k₂ = ${vv(e1.k2)}; &nbsp; prima de la cartera = ${f(rho)} ${PR - rhoc < 0 ? '−' : '+'} ${f(Math.abs(PR - rhoc))} = ${vv(Pt)}`) +
           (conv ? '<span class="okb">El reaseguro conviene</span> (ec. 77): Π<sub>R</sub> < ρ(−y<sub>c</sub>), así que la prima baja.' : '<span class="badb">El reaseguro no conviene</span>: Π<sub>R</sub> ≥ ρ(−y<sub>c</sub>), la prima sube.'));
         R.uses('rea58', 'k78');
-        R.ans('Con reaseguro.', `El riesgo cedido es y<sub>c</sub> = ${T.treatyToString(yc)}, con 𝔼(y<sub>c</sub>) = ${f(Eyc)} y ${rn(sp, '−y<sub>c</sub>')} = ${f(rhoc)}. El precio del reaseguro será ${f(1 + k1r)} × ${f(Eyc)} + ${f(k2r)} × ${f(rhoc)} = ${vv(PR)}. Por consiguiente, las relaciones entre los recargos son las anteriores ${shift < 0 ? 'menos' : 'más'} (${f(PR)} − ${f(rhoc)})/${f(rho)} = ${f(Math.abs(shift))}, es decir,` + eq(relTxt(shift)) +
+        R.ans('Con reaseguro.', `El riesgo cedido es y<sub>c</sub> = ${T.treatyToString(yc)}, con 𝔼(y<sub>c</sub>) = ${f(Eyc)} y ${rn(sp, '−y<sub>c</sub>')} = ${f(rhoc)}. ${otraR ? `La reaseguradora mide el riesgo con ${rn(spR, '−y<sub>c</sub>')} = ${f(rhocR)}, así que el` : 'El'} precio del reaseguro será ${f(1 + k1r)} × ${f(Eyc)} + ${f(k2r)} × ${f(rhocR)} = ${vv(PR)}. Por consiguiente, las relaciones entre los recargos son las anteriores ${shift < 0 ? 'menos' : 'más'} (${f(PR)} − ${f(rhoc)})/${f(rho)} = ${f(Math.abs(shift))}, es decir,` + eq(relTxt(shift)) +
           `Se obtiene (k₁; k₂) = (${vv(e1.k1)}; 0) y (0; ${vv(e1.k2)}). La prima de la cartera será ${f(rho)} ${PR - rhoc < 0 ? '−' : '+'} ${f(Math.abs(PR - rhoc))} = ${vv(Pt)}${c ? `, y para cada póliza k₂ se multiplica por ${f(c)}: k₂ = ${vv(e1.k2 * c)}` : ''}. ${conv ? 'El reaseguro abarata la prima, así que conviene a la cedente.' : 'El reaseguro encarece la prima.'}`);
         if (c) R.key('k2Rep', e1.k2 * c);
         polTable('Con reaseguro', Pt, 're');
@@ -3622,6 +3787,14 @@ const P = (function () {
       return R;
     },
     examples: [
+      { id: 'nov10-g', label: 'Clase 10 nov. 2026 · g) · 5.000 pólizas (𝔼 = 2,275; σ = 4,2892), CVaR 95 %', values: { src: 'tabla', m_rho: 'CVaR', m_lvl: '95', R0: '0', r01o: '1,6448536269514715', k1: '', cart: [{ n: '5000', E: '2,275', s: '4,289157842747222', r: '15,819965325458567' }], reOn: false, invOn: false },
+        expect: [{ k: 'rho', l: 'Prima de la cartera', v: 11873.86644, src: 'macro D' }, { k: 'k1max', l: 'Recargo de seguridad máx.', v: 0.0438563902 }, { k: 'k2max', l: 'Recargo por riesgo máx.', v: 0.0420138159 }, { k: 'c', l: 'Coeficiente de reducción', v: 0.1501124205 }], note: 'Ejercicio de clase del 10 nov. 2026 (no es de examen). La solución (macros D y F) usa ρ(0,1) = 1,6449, el del VaR<sub>95%</sub>, aunque pide CVaR<sub>95%</sub>; se pone ese valor en «ρ(0,1) a usar» para reproducirla. Para el CVaR correcto, borra ese campo.' },
+      { id: 'nov10-h', label: 'Clase 10 nov. 2026 · h) · reaseguro 0,8Y − 0,4(Y − 11.000)⁺, reaseguradora 1,01𝔼 + 0,01·VaR₉₅', values: { src: 'tabla', m_rho: 'CVaR', m_lvl: '95', R0: '0', r01o: '1,6448536269514715', k1: '', cart: [{ n: '5000', E: '2,275', s: '4,289157842747222', r: '15,819965325458567' }], reOn: true, re: '0,8y − 0,4(y − 11.000)+', reT: 'c', k1r: '0,01', k2r: '0,01', mrOn: true, mr_rho: 'VaR', mr_lvl: '95', invOn: false },
+        expect: [{ k: 'primaRe', l: 'Nueva prima', v: 11895.78615, src: 'solución (con 𝔼, VaR y CVaR cedidos de la macro C)' }], note: 'Ejercicio de clase del 10 nov. 2026 (no es de examen). La solución (macros D y F) usa ρ(0,1) = 1,6449, el del VaR<sub>95%</sub>, aunque pide CVaR<sub>95%</sub>; se pone ese valor en «ρ(0,1) a usar» para reproducirla. Para el CVaR correcto, borra ese campo. La solución toma de la macro C 𝔼(y<sub>c</sub>) = 8.944,53, VaR = 8.997,99 y CVaR = 9.102,04; ese VaR no cuadra con VaR<sub>95%</sub>(−y<sub>c</sub>) = 0,8·VaR − 0,4·(VaR − 11.000) de la normal, de ahí la diferencia. En ambos casos el reaseguro no compensa.' },
+      { id: 'nov10-i', label: 'Clase 10 nov. 2026 · i) · inversión en dos índices (5 %, 9 %) y (8 %, 12 %), correlación 0,2', values: { src: 'tabla', m_rho: 'CVaR', m_lvl: '95', R0: '0', r01o: '1,6448536269514715', k1: '', cart: [{ n: '5000', E: '2,275', s: '4,289157842747222', r: '15,819965325458567' }], reOn: false, invOn: true, r0: '0', act: [{ mu: '5%', sd: '9%' }, { mu: '8%', sd: '12%' }], corr: '1-2: 0,2' },
+        expect: [{ k: 'x0', l: 'Peso activo sin riesgo', v: 0.8278509123, src: 'macro F' }, { k: 'x1', l: 'Peso índice 1', v: 0.0866445739 }, { k: 'x2', l: 'Peso índice 2', v: 0.0855045137 }, { k: 'rhoR', l: 'Riesgo actuarial + financiero', v: -61.94045111 }, { k: 'primaInv', l: 'Nueva prima de la cartera', v: 11811.92599 }], note: 'Ejercicio de clase del 10 nov. 2026 (no es de examen). La solución (macros D y F) usa ρ(0,1) = 1,6449, el del VaR<sub>95%</sub>, aunque pide CVaR<sub>95%</sub>; se pone ese valor en «ρ(0,1) a usar» para reproducirla. Para el CVaR correcto, borra ese campo.' },
+      { id: 'nov10-j', label: 'Clase 10 nov. 2026 · j) · la mitad con franquicia anual 5', values: { src: 'tabla', m_rho: 'CVaR', m_lvl: '95', R0: '0', r01o: '1,6448536269514715', k1: '', cart: [{ n: '2500', E: '2,275', s: '4,289157842747222', r: '15,819965325458567' }, { n: '2500', E: '0,6368078762429434', s: '3,30753588354234', r: '10,81996532545859' }], reOn: false, invOn: false },
+        expect: [{ k: 'rho', l: 'Prima de la cartera', v: 7724.973481, src: 'macro D' }, { k: 'k1max', l: 'Recargo de seguridad máx.', v: 0.0611927448 }, { k: 'c1_1', l: 'Prima póliza sin franquicia (k₂ = 0)', v: 2.414213494 }, { k: 'c1_2', l: 'Prima póliza con franquicia (k₂ = 0)', v: 0.6757758981 }, { k: 'c3_1', l: 'Prima póliza sin franquicia (k₁ = 0)', v: 2.38081204 }, { k: 'c3_2', l: 'Prima póliza con franquicia (k₁ = 0)', v: 0.7091773524 }], note: 'Ejercicio de clase del 10 nov. 2026 (no es de examen). La solución (macros D y F) usa ρ(0,1) = 1,6449, el del VaR<sub>95%</sub>, aunque pide CVaR<sub>95%</sub>; se pone ese valor en «ρ(0,1) a usar» para reproducirla. Para el CVaR correcto, borra ese campo.' },
       { id: 'oct20-p', label: 'Clase 20 oct. 2026 · 5.000/2.000/2.000/1.000 pólizas, CVaR 95 %, k₁ = 15 %, reparto 75 % coste / 25 % riesgo', values: { src: 'tabla', cart: [{ n: '5000', E: '5', s: '30', r: '200' }, { n: '2000', E: '8', s: '50', r: '400' }, { n: '2000', E: '10', s: '70', r: '800' }, { n: '1000', E: '20', s: '200', r: '1400' }], m_rho: 'CVaR', m_lvl: '95', R0: '0', r01o: '2,06323586', k1: '0,15', wE: '0,75', reOn: false, invOn: false },
         expect: [{ k: 'rho', l: 'Prima de la cartera', v: 96888.25583, src: 'hoja Oct_20_I' }, { k: 'k1max', l: 'Recargo de seguridad', v: 0.1961513065 }, { k: 'k2max', l: 'k₂ (k₁ = 0)', v: 0.1639853633 }, { k: 'k2g', l: 'k₂ con k₁ = 0,15', v: 0.0385831678 }, { k: 'c', l: 'Precio unidad de riesgo ρ/Σρᵢ', v: 0.0201850533 }, { k: 'mix_1', l: 'Prima mixta póliza 1', v: 5.494820064 }, { k: 'mix_4', l: 'Prima mixta póliza 4', v: 25.00703825 }], note: 'Hoja de clase (no es de examen). Usa φ con 2π ≈ 6,28, por eso se pone ρ(0,1) = 2,06323586.' },
       { id: 'oct20-cp', label: 'Clase 20 oct. 2026 · cuota-parte 30 % cedido, PPVE 10 %', values: { src: 'tabla', cart: [{ n: '5000', E: '5', s: '30', r: '200' }, { n: '2000', E: '8', s: '50', r: '400' }, { n: '2000', E: '10', s: '70', r: '800' }, { n: '1000', E: '20', s: '200', r: '1400' }], m_rho: 'CVaR', m_lvl: '95', R0: '0', r01o: '2,06323586', k1: '0,15', reOn: true, re: '0,3y', reT: 'c', k1r: '0,1', k2r: '0', invOn: false },
@@ -3847,7 +4020,7 @@ const VIEWS = (function () {
   const pracOfRow = r => P1T.includes(r[4]) ? 'p1' : (P3T.includes(r[4]) || r[3] === 10) ? 'p3' : (r[3] === 11 || r[3] === 12) ? 'p4' : 'p2';
   const PRAC = [
     {
-      id: 'p1', glos: [['Tabla «nº de pólizas · coste esperado · desviación · riesgo»', 'Recargos › Cartera: una fila por tipo de póliza. «Riesgo» = ρ(−yᵢ) de cada póliza (sirve para repartir k₂).'], ['«ρ = CVaR al 95 %» · «SW₁» · «SDPT₁» · «𝔈₀,₃» · «Wang W₀,₅»', 'Medida: CVaR con nivel 95 · SW con a = 1 · SDPT con a = 1 · Expectil con μ = 0,3 · Wang con a = 0,5.'], ['«ρ(0,1) = 1,6036 (simulado)» o la solución usa un valor simulado', 'Campo «ρ(0,1) a usar». Si no lo dan, déjalo vacío (valor exacto).'], ['«Reservas iniciales de 50.000»', 'R₀ = 50.000 (si no se dicen, 0).'], ['«Recargo de seguridad máximo / mínimo» · «recargo por riesgo máximo / mínimo»', 'Salen siempre: seguridad máx. = k₁ con k₂ = 0; riesgo máx. = k₂ con k₁ = 0; los mínimos son 0.'], ['«Si k₁ = 5 %, ¿cuánto vale k₂?»', 'Campo «k₁ fijado» = 5 %.'], ['«Reparta la prima: 75 % según coste esperado y 25 % según riesgo»', 'Campo «Reparto mixto» = 0,75.'], ['«Cuota-parte con retención del 80 %» · «se cede el 30 %»', 'Reaseguro: <code>0,2y</code> · <code>0,3y</code> (expresión del riesgo cedido).'], ['«Stop-loss con prioridad (deducible) 1.600.000»', '<code>(y − 1.600.000)+</code>'], ['«y<sub>r</sub> = 0,9y − 0,5(y − 1.700.000)⁺» (dan el retenido)', 'Escríbelo tal cual y en «La expresión es» elige «el riesgo retenido».'], ['«Capa entre 950.000 y 1.150.000»', '<code>(y − 950.000)+ − (y − 1.150.000)+</code>'], ['«Cede el 20 % hasta 425.000 y el 60 % por encima»', '<code>tramos: 0:0,2; 425.000:0,6</code>'], ['«La reaseguradora aplica el PPVE con recargo del 10 %»', 'k₁ʳ = 0,1 y k₂ʳ = 0.'], ['«Π<sub>R</sub> = 1,01𝔼(y<sub>c</sub>) + 0,04·SW₁(−y<sub>c</sub>)»', 'k₁ʳ = 0,01 y k₂ʳ = 0,04.'], ['«Lo recaudado se invierte en un activo sin riesgo al 0,5 % y dos activos (4 %, 10 %), (5 %, 12 %) con correlación 0,5»', 'Inversión: r₀ = 0,5 %, una fila por activo (rentabilidad, desviación), correlaciones <code>1-2: 0,5</code>.'], ['«Bajo Π = 1,05𝔼 + 0,1VaR₉₀ la prima es 11,88 y bajo …»', 'Herramienta «Normal: hallar m y s».'], ['«Determine μ para que el recargo de seguridad máximo sea del 10 %»', 'Herramienta «Parámetro de la medida» con objetivo «recargo de seguridad máximo» = 0,1.']], whenShort: 'Ej. 1 en 2026 · Ej. 2 en los anteriores', n: 1, parte: 1, color: 'var(--t8)', nav: 'Práctico 1 · Cartera: recargos y reaseguro', short: 'Cartera: recargos y reaseguro',
+      id: 'p1', glos: [['Tabla «nº de pólizas · coste esperado · desviación · riesgo»', 'Recargos › Cartera: una fila por tipo de póliza. «Riesgo» = ρ(−yᵢ) de cada póliza (sirve para repartir k₂).'], ['«ρ = CVaR al 95 %» · «SW₁» · «SDPT₁» · «𝔈₀,₃» · «Wang W₀,₅»', 'Medida: CVaR con nivel 95 · SW con a = 1 · SDPT con a = 1 · Expectil con μ = 0,3 · Wang con a = 0,5.'], ['«ρ(0,1) = 1,6036 (simulado)» o la solución usa un valor simulado', 'Campo «ρ(0,1) a usar». Si no lo dan, déjalo vacío (valor exacto).'], ['«Reservas iniciales de 50.000»', 'R₀ = 50.000 (si no se dicen, 0).'], ['«Recargo de seguridad máximo / mínimo» · «recargo por riesgo máximo / mínimo»', 'Salen siempre: seguridad máx. = k₁ con k₂ = 0; riesgo máx. = k₂ con k₁ = 0; los mínimos son 0.'], ['«Si k₁ = 5 %, ¿cuánto vale k₂?»', 'Campo «k₁ fijado» = 5 %.'], ['«Reparta la prima: 75 % según coste esperado y 25 % según riesgo»', 'Campo «Reparto mixto» = 0,75.'], ['«Cuota-parte con retención del 80 %» · «se cede el 30 %»', 'Reaseguro: <code>0,2y</code> · <code>0,3y</code> (expresión del riesgo cedido).'], ['«Stop-loss con prioridad (deducible) 1.600.000»', '<code>(y − 1.600.000)+</code>'], ['«y<sub>r</sub> = 0,9y − 0,5(y − 1.700.000)⁺» (dan el retenido)', 'Escríbelo tal cual y en «La expresión es» elige «el riesgo retenido».'], ['«Capa entre 950.000 y 1.150.000»', '<code>(y − 950.000)+ − (y − 1.150.000)+</code>'], ['«Cede el 20 % hasta 425.000 y el 60 % por encima»', '<code>tramos: 0:0,2; 425.000:0,6</code>'], ['«La reaseguradora aplica el PPVE con recargo del 10 %»', 'k₁ʳ = 0,1 y k₂ʳ = 0.'], ['«Π<sub>R</sub> = 1,01𝔼(y<sub>c</sub>) + 0,04·SW₁(−y<sub>c</sub>)»', 'k₁ʳ = 0,01 y k₂ʳ = 0,04.'], ['«La reaseguradora aplica 1,01𝔼(Y) + 0,01VaR₉₅(−Y)» (otra medida que la cedente)', 'k₁ʳ = 0,01, k₂ʳ = 0,01 y marca «La reaseguradora usa otra medida» → VaR 95.'], ['«Lo recaudado se invierte en un activo sin riesgo al 0,5 % y dos activos (4 %, 10 %), (5 %, 12 %) con correlación 0,5»', 'Inversión: r₀ = 0,5 %, una fila por activo (rentabilidad, desviación), correlaciones <code>1-2: 0,5</code>.'], ['«Bajo Π = 1,05𝔼 + 0,1VaR₉₀ la prima es 11,88 y bajo …»', 'Herramienta «Normal: hallar m y s».'], ['«Determine μ para que el recargo de seguridad máximo sea del 10 %»', 'Herramienta «Parámetro de la medida» con objetivo «recargo de seguridad máximo» = 0,1.']], whenShort: 'Ej. 1 en 2026 · Ej. 2 en los anteriores', n: 1, parte: 1, color: 'var(--t8)', nav: 'Práctico 1 · Cartera: recargos y reaseguro', short: 'Cartera: recargos y reaseguro',
       title: 'Cartera de pólizas: recargos, reaseguro e inversión', temas: [4, 5, 6, 8],
       when: 'Ej. 1 en Enero y Junio 2026 · Ej. 1 y 2 en Junio 2025 · Ej. 2 de Enero 2014 a Enero 2025 y en Junio 2024 (Ej. 3 en Enero 2015; Enero 2014 y 2015 añaden un Ej. 5 de reaseguro por tramos). Sólo falta en Junio 2023.',
       intro: 'Empieza con una <b>tabla de pólizas</b> (nº, coste esperado, desviación y riesgo). Casi todo se hace en <b>Recargos</b>: metes la tabla una vez y vas abriendo «Reaseguro» e «Inversión» según los apartados.',
@@ -3864,7 +4037,7 @@ const VIEWS = (function () {
       ]
     },
     {
-      id: 'p2', glos: [['«N binomial negativa de parámetros α = 1, θ = 0,4»', 'Frecuencia: Binomial negativa, modo «α y θ».'], ['«N binomial negativa de media 2 y varianza 10»', 'Binomial negativa, modo «media y varianza».'], ['«λ ∼ Gamma(α; β) y N|λ Poisson(λ)»', 'Binomial negativa, modo «Poisson–Gamma» (α y β de la gamma).'], ['«N toma los valores 0, 1, 2 con probabilidades 0,5; 0,3; 0,2»', 'Frecuencia: Tabla.'], ['«Severidad log-normal de media 1.000 y desviación 250»', 'Severidad: Log-normal, modo «media y desviación».'], ['«Severidad exponencial de media 100»', 'Exponencial, β = 100.'], ['«Suma de 3 exponenciales de media 70» · «Erlang»', 'Gamma, modo «suma de k exponenciales» (k = 3, β = 70).'], ['«Gamma de media 100 y varianza 5.000»', 'Gamma, modo «media y desviación» con σ = <code>sqrt(5000)</code>.'], ['«La severidad será siempre 1.000» · «100, 200, 300, 400 equiprobables»', 'Severidad: Constante · Discreta (valores y probabilidades).'], ['«Π(y) = 1,05𝔼(y) + 0,1·CVaR₉₉(−y)»', 'a = 1,05; b = 0,1; medida CVaR, nivel 99.'], ['«PPVE con recargo del 10 %»', 'a = 1,1; b = 0.'], ['«Dos principios de prima Π₁ y Π₂»', 'El segundo en «Segunda prima» (a₂, b₂).'], ['«Franquicia de 100 por siniestro» · «indemnización máxima por siniestro 1.200» · «máximo anual 3.000»', 'd = 100 · L = 1.200 · F = 3.000.'], ['«¿Probabilidad de que la compañía pierda dinero?» · «IP(y = 0)»', 'Salen siempre en el resultado.'], ['«Recargo k mínimo para que IP(pérdida) < 20 %»', 'Campo ε = 20 % (y la prima tipo (1 + k)𝔼 + bρ con tu b).'], ['«Probabilidad de ganar al menos la mitad de la prima» · «si ha habido como mucho un siniestro»', 'Fracción = 0,5 · Condicionar a N = 1 (da N = 1 y N ≤ 1).'], ['«Distribución de y por el método de Panjer hasta que IP(y > U) ≤ 0,3»', 'Severidad discreta + campo «Panjer: hasta U» = 0,3.'], ['«Cartera de 1.800 pólizas» · «número mínimo de pólizas para IP(pérdida) ≤ 5 %»', 'Grupo «Cartera de n pólizas»: n = 1.800 · ε = 5 %.'], ['«Prima a posteriori y % de reducción respecto de la a priori»', 'Resuelve la a priori; luego cambia la frecuencia y pon la prima a priori en «Prima de referencia».'], ['«Siniestros leves (media, desviación, probabilidad) y graves (…)» · «severidades correlacionadas»', 'Herramienta «Momentos e índices de mixtura».']], whenShort: 'Ej. 2 en 2026 · Ej. 3 en los anteriores', n: 2, parte: 1, color: 'var(--t3)', nav: 'Práctico 2 · Frecuencia × severidad', short: 'Frecuencia × severidad',
+      id: 'p2', glos: [['«N binomial negativa de parámetros α = 1, θ = 0,4»', 'Frecuencia: Binomial negativa, modo «α y θ».'], ['«N binomial negativa de media 2 y varianza 10»', 'Binomial negativa, modo «media y varianza».'], ['«λ ∼ Gamma(α; β) y N|λ Poisson(λ)»', 'Binomial negativa, modo «Poisson–Gamma» (α y β de la gamma).'], ['«N toma los valores 0, 1, 2 con probabilidades 0,5; 0,3; 0,2»', 'Frecuencia: Tabla.'], ['«Severidad log-normal de media 1.000 y desviación 250»', 'Severidad: Log-normal, modo «media y desviación».'], ['«Severidad exponencial de media 100»', 'Exponencial, β = 100.'], ['«Suma de 3 exponenciales de media 70» · «Erlang»', 'Gamma, modo «suma de k exponenciales» (k = 3, β = 70).'], ['«Gamma de media 100 y varianza 5.000»', 'Gamma, modo «media y desviación» con σ = <code>sqrt(5000)</code>.'], ['«La severidad será siempre 1.000» · «100, 200, 300, 400 equiprobables»', 'Severidad: Constante · Discreta (valores y probabilidades).'], ['«Π(y) = 1,05𝔼(y) + 0,1·CVaR₉₉(−y)»', 'a = 1,05; b = 0,1; medida CVaR, nivel 99.'], ['«PPVE con recargo del 10 %»', 'a = 1,1; b = 0.'], ['«Dos principios de prima Π₁ y Π₂»', 'El segundo en «Segunda prima» (a₂, b₂).'], ['«Franquicia de 100 por siniestro» · «indemnización máxima por siniestro 1.200» · «máximo anual 3.000»', 'd = 100 · L = 1.200 · F = 3.000.'], ['«¿Probabilidad de que la compañía pierda dinero?» · «IP(y = 0)»', 'Salen siempre en el resultado.'], ['«Recargo k mínimo para que IP(pérdida) < 20 %»', 'Campo ε = 20 % (y la prima tipo (1 + k)𝔼 + bρ con tu b).'], ['«Probabilidad de ganar al menos la mitad de la prima» · «si ha habido como mucho un siniestro»', 'Fracción = 0,5 · Condicionar a N = 1 (da N = 1 y N ≤ 1).'], ['«Distribución de y por el método de Panjer hasta que IP(y > U) ≤ 0,3»', 'Severidad discreta + campo «Panjer: hasta U» = 0,3.'], ['«Cartera de 1.800 pólizas» · «número mínimo de pólizas para IP(pérdida) ≤ 5 %»', 'Grupo «Cartera de n pólizas»: n = 1.800 · ε = 5 %.'], ['«Prima a posteriori y % de reducción respecto de la a priori»', 'Resuelve la a priori; luego cambia la frecuencia y pon la prima a priori en «Prima de referencia».'], ['«Siniestros leves (media, desviación, probabilidad) y graves (…)» · «severidades correlacionadas»', 'Herramienta «Momentos e índices de mixtura».'], ['«Cada siniestro es leve, moderado o grave; la severidad es log-normal con estos parámetros» y piden VaR/CVaR', 'Coste agregado → Severidad «Mixtura de tipos» (una fila por tipo: probabilidad, distribución, media, desviación).'], ['«Determine VaR₉₅, CVaR₉₅ y SW₁»', 'Campo «Otras medidas»: <code>VaR 95; CVaR 95; SW 1</code>.'], ['«Repita si hay una franquicia igual a 5» (sobre el coste y) · «𝔼((y − 5)⁺)»', 'Campo «Franquicia sobre el coste anual D» = 5.'], ['«Probabilidad de que las pérdidas superen el 85 % de la prima»', 'Campo «IP(pérdidas > f·Π)» con f = 0,85.'], ['«5.000 asegurados… ¿cuánto cobrar a la cartera y a cada asegurado?» · «la mitad con franquicia» · «riesgo colectivo»', 'Grupo «Cartera de n pólizas»: n, «De ellas, con la franquicia anual», otra medida para la cartera y «Riesgo colectivo».']], whenShort: 'Ej. 2 en 2026 · Ej. 3 en los anteriores', n: 2, parte: 1, color: 'var(--t3)', nav: 'Práctico 2 · Frecuencia × severidad', short: 'Frecuencia × severidad',
       title: 'Frecuencia × severidad: coste agregado de una póliza', temas: [1, 2, 3, 4, 7],
       when: 'Ej. 2 en Enero y Junio 2026, Junio 2023 y Enero 2015 · Ej. 3 en todas las demás. Sale en las 16 convocatorias.',
       intro: '«La frecuencia es … y la severidad es …». Casi todo sale de <b>Coste agregado</b>, rellenando sólo los campos opcionales que correspondan a lo que preguntan.',

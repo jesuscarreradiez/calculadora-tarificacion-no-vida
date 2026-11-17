@@ -56,7 +56,29 @@ const P = (function () {
   const CF_POS = ['exponencial', 'gamma', 'lognormal', 'normal', 'pareto', 'weibull', 'gpd', 'wald', 'uniforme', 'beta', 'chi2', 'frechet'];
 
   /* ───────── Familias discretas sencillas ───────── */
+  const MIXF = { lognormal: 'Log-normal', gamma: 'Gamma', exponencial: 'Exponencial', normal: 'Normal', constante: 'Constante' };
   const DF = {
+    mixtura: {
+      lab: 'Mixtura de tipos (leve, moderado, grave…) por media y desviación',
+      fields: p => [{ id: p + 'mx', type: 'rows', label: 'Un tipo de siniestro por fila: probabilidad, distribución, media y desviación', cols: [{ id: 'nom', label: 'Tipo', type: 'text', w: '16%' }, { id: 'p', label: 'Prob.' }, { id: 'fam', label: 'Distribución', type: 'sel', opts: Object.entries(MIXF), def: 'lognormal', w: '24%' }, { id: 'E', label: 'Media' }, { id: 'sd', label: 'Desviación' }],
+        def: [{ nom: 'Leve', p: '0,8', fam: 'lognormal', E: '1', sd: '0,5' }, { nom: 'Moderado', p: '0,15', fam: 'lognormal', E: '3', sd: '2' }, { nom: 'Grave', p: '0,05', fam: 'lognormal', E: '10', sd: '10' }], wide: true }],
+      build: (V, p) => {
+        const rows = V.rows(p + 'mx'); if (!rows.length) throw new Error('Añade al menos un tipo de siniestro.');
+        const sp = rows.reduce((a, r) => a + r.p, 0); if (Math.abs(sp - 1) > 1e-6) throw new Error(`Las probabilidades de los tipos suman ${f(sp)} y deben sumar 1.`);
+        const comps = rows.map((r, i) => {
+          const fam = r.fam || 'lognormal';
+          if (fam === 'constante') return T.constant(r.E);
+          if (!(r.sd > 0) && fam !== 'exponencial') throw new Error(`Tipo ${i + 1}: la desviación debe ser positiva.`);
+          if (fam === 'lognormal') return T.lognormalMoments(r.E, r.sd);
+          if (fam === 'gamma') return T.gammaD((r.E / r.sd) ** 2, r.sd * r.sd / r.E);
+          if (fam === 'exponencial') return T.gammaD(1, r.E);
+          return T.normal(r.E, r.sd);
+        });
+        const D = T.mixtureDist(comps, rows.map(r => r.p));
+        const Vm = rows.reduce((a, r, i) => a + r.p * comps[i].mean ** 2, 0) - D.mean ** 2, Ev = rows.reduce((a, r, i) => a + r.p * comps[i].var, 0);
+        return { D, ex: `La severidad es una mixtura: ${rows.map((r, i) => `${r.nom || 'tipo ' + (i + 1)} con probabilidad ${f(r.p)} (${MIXF[r.fam || 'lognormal'].toLowerCase()} de media ${f(r.E)} y desviación ${f(r.fam === 'exponencial' ? r.E : r.sd)})`).join('; ')}. Por (27): 𝔼(S) = Σ pᵢ𝔼ᵢ = ${f(D.mean)}; σ²(S) = varianza de medias + media de varianzas = ${f(Vm)} + ${f(Ev)} = ${f(D.var)} (σ(S) = ${f(D.sd)}).` };
+      }
+    },
     constante: {
       lab: 'Constante (siempre el mismo valor)',
       fields: p => [{ id: p + 'cte', type: 'num', label: 'Valor', def: '1' }],
@@ -232,7 +254,7 @@ const P = (function () {
     if (kinds.includes('cont')) out.push(...withShow(famFields(p + 'c_', CF, CF_ALL, over.contFam || 'normal', over), is('cont')));
     if (kinds.includes('compuesta')) out.push(...withShow([
       ...famFields(p + 'N_', FR, Object.keys(FR), 'binneg', over, 'Frecuencia N'),
-      ...famFields(p + 'S_', CF, CF_POS.concat(['constante', 'discreta']), 'lognormal', over, 'Severidad S'),
+      ...famFields(p + 'S_', CF, CF_POS.concat(['mixtura', 'constante', 'discreta']), 'lognormal', over, 'Severidad S'),
       { id: p + 'd', type: 'num', label: 'Franquicia por siniestro d', def: '', ph: 'sin franquicia' },
       { id: p + 'L', type: 'num', label: 'Indemnización máx. por siniestro', def: '', ph: 'sin límite' },
       { id: p + 'F', type: 'num', label: 'Indemnización máx. anual (agregada)', def: '', ph: 'sin límite' }

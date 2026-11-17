@@ -81,3 +81,15 @@ engine.js (numérica, distribuciones, medidas, FFT/Panjer, MC) · ui.js (formula
 - Cada práctico tiene la chuleta plegable «Cómo pasar el enunciado a la calculadora» (frase típica → campo), además de «¿Qué herramienta uso para cada apartado?».
 - Los campos que siguen con el valor de ejemplo se marcan en amarillo con un aviso encima de «Resolver» (no si se ha cargado un ejemplo de examen). Un campo vacío da «Falta el dato …».
 - Cada párrafo de la respuesta de examen tiene su botón ⧉ para copiar sólo ese apartado.
+
+## Ejercicio largo de clase (10 nov. 2026: Ejercicio.tex + macros D/F) y Nov_10_III
+- Nov_10_III: Bühlmann con y|Λ exponencial, Λ ∼ N(100; 10): 𝔼 post = 100/(Ih + 1), h años sin siniestros; h para un 20 % = (1/I)(1/0,8 − 1). Pendiente (tema 10).
+- Nov_4: Poisson–Gamma (α* = α + ΣNᵢ, β* = β/(1 + hβ)), % reducción, peso hβ/(1 + hβ); d) prima con CVaR90 de BN + log-normal(1; 3) simulada (6,6717 / 5,3595; exacto 6,6278 / 5,3741). Pendiente (tema 10).
+- Calculos.xlsx: beta para cada IP(N = n), n = 0…3, con media Poisson(1) y v = 2; posterior (uₙ + kₙ)/(uₙ + v + h); cola N ≥ 4 escalada por α = (1 − Σ post)/(1 − Σ prior); 𝔼(N) post = 0,8584 (−14,16 %). Primas con CVaR98 simuladas (macro A con frecuencia «Ejemplo»). Pendiente (tema 10).
+- Implementado para el ejercicio largo (Prácticos 1 y 2):
+  - Severidad «Mixtura de tipos» (T.mixtureDist: probabilidad, distribución, media y desviación por fila) en Coste agregado.
+  - Franquicia sobre el coste anual (y − D)⁺ (campo Dg): 𝔼, σ, medidas, prima, IP(pérdida); «Otras medidas» (VaR 95; CVaR 95; SW 1); IP(pérdidas > f·Π) = IP(y > (1 + f)Π).
+  - Cartera: otra medida para la cartera, nº de pólizas con franquicia (cartera mixta), riesgo colectivo exacto (T.sumIID: FFT elevando la función característica de cada póliza) frente al individual, y párrafo del modelo de simulación de la cartera.
+  - Reaseguradora con su propia medida (p. ej. 1,01𝔼 + 0,01VaR95) en Recargos y Reaseguro.
+  - Motor: la rejilla de la composición llega hasta S.qs(1e−10) (colas pesadas: la media de BN + log-normal(1; 3) ya sale 1).
+- Errata del ejercicio: g) y j) usan ρ(0,1) = 1,6449 (VaR95) aunque piden CVaR95. Ejemplos nov10-* en Coste agregado y en Recargos (g, i, j al céntimo con ese ρ(0,1)).

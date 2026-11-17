@@ -69,7 +69,9 @@
           { id: 're', type: 'text', label: 'Tratado', def: '0,5(y − 1.600.000)+', wide: true, show: v => v.reOn, help: 'Ej.: 0,2y (cuota-parte con retención del 80 %) · (y − U)+ · tramos: 0:0,2; 425.000:0,6' },
           { id: 'reT', type: 'sel', label: 'La expresión es', def: 'c', opts: [['c', 'el riesgo cedido y_c'], ['r', 'el riesgo retenido y_r']], show: v => v.reOn },
           { id: 'k1r', type: 'num', label: 'k₁ʳ de la reaseguradora', def: '0', show: v => v.reOn },
-          { id: 'k2r', type: 'num', label: 'k₂ʳ de la reaseguradora', def: '0,04', show: v => v.reOn }
+          { id: 'k2r', type: 'num', label: 'k₂ʳ de la reaseguradora', def: '0,04', show: v => v.reOn },
+          { id: 'mrOn', type: 'check', label: 'La reaseguradora usa otra medida (p. ej. 1,01𝔼 + 0,01·VaR₉₅)', def: false, wide: true, show: v => v.reOn },
+          ...P.withShow(P.measFields('mr_', { type: 'VaR', lvl: '95' }, 'Medida de la reaseguradora'), v => v.reOn && v.mrOn)
         ]
       },
       {
@@ -177,7 +179,10 @@
         // Con medida comonótona aditiva y tratado comonótono: ρ(−y_c) = a₀ρ(−y) + Σ aᵢρ(−(y − Uᵢ)⁺), usando el ρ(0,1) indicado para la parte proporcional
         const addv = T.comonotoneAdditive(sp) && T.plSlopes(yc).every(x => x.slope >= -1e-12 && x.slope <= 1 + 1e-12);
         const rhoc = addv ? yc.a0 * rho + yc.layers.reduce((a, l) => a + l.a * T.layerRisk(D, sp, l.U), 0) : T.risk(C, sp);
-        const Eyc = C.mean, PR = (1 + k1r) * Eyc + k2r * rhoc, rhor = addv ? rho - rhoc : T.risk(Rr, sp);
+        const spR = V.b('mrOn') ? P.buildMeas(V, 'mr_') : sp, otraR = V.b('mrOn');
+        const rhocR = otraR ? T.risk(C, spR) : rhoc;
+        const Eyc = C.mean, PR = (1 + k1r) * Eyc + k2r * rhocR, rhor = addv ? rho - rhoc : T.risk(Rr, sp);
+        if (otraR) R.key('rhocR', rhocR);
         const shift = (PR - rhoc) / rho, Pt = P0 + PR - rhoc, e1 = ext(Pt);
         const conv = PR < rhoc;
         R.tile('Precio del reaseguro Π<sub>R</sub>', PR).tile('Prima de la cartera con reaseguro', Pt, { main: true }).tile('k₁ máx. con reaseguro', e1.k1).tile('k₂ máx. con reaseguro', e1.k2);
@@ -185,12 +190,13 @@
         R.step('Reaseguro: riesgo cedido y precio', eq(`y<sub>c</sub> = ${T.treatyToString(yc)}; &nbsp; y<sub>r</sub> = ${T.treatyToString(yr)}`) +
           yc.layers.map(l => eq(P.slFormula({ D, normal: true, m, s }, l.U))).join('') +
           eq(`𝔼(y<sub>c</sub>) = ${vv(Eyc)}; &nbsp; ${rn(sp, '−y<sub>c</sub>')} = ${vv(rhoc)}`) +
-          eq(`Π<sub>R</sub> = (1 + ${f(k1r)})·${f(Eyc)} + ${f(k2r)}·${f(rhoc)} = ${vv(PR)}`));
+          (otraR ? eq(`La reaseguradora usa ${rn(spR, '−y<sub>c</sub>')} = ${vv(rhocR)}`) : '') +
+          eq(`Π<sub>R</sub> = (1 + ${f(k1r)})·${f(Eyc)} + ${f(k2r)}·${f(rhocR)} = ${vv(PR)}`));
         R.step('Nueva relación de recargos (ec. 78)', eq(`(Π<sub>R</sub> − ${rn(sp, '−y<sub>c</sub>')})/${rn(sp)} = (${f(PR)} − ${f(rhoc)})/${f(rho)} = ${vv(shift)}`) +
           eq(relTxt(shift)) + eq(`k₂ = 0 ⇒ k₁ = ${vv(e1.k1)}; &nbsp; k₁ = 0 ⇒ k₂ = ${vv(e1.k2)}; &nbsp; prima de la cartera = ${f(rho)} ${PR - rhoc < 0 ? '−' : '+'} ${f(Math.abs(PR - rhoc))} = ${vv(Pt)}`) +
           (conv ? '<span class="okb">El reaseguro conviene</span> (ec. 77): Π<sub>R</sub> < ρ(−y<sub>c</sub>), así que la prima baja.' : '<span class="badb">El reaseguro no conviene</span>: Π<sub>R</sub> ≥ ρ(−y<sub>c</sub>), la prima sube.'));
         R.uses('rea58', 'k78');
-        R.ans('Con reaseguro.', `El riesgo cedido es y<sub>c</sub> = ${T.treatyToString(yc)}, con 𝔼(y<sub>c</sub>) = ${f(Eyc)} y ${rn(sp, '−y<sub>c</sub>')} = ${f(rhoc)}. El precio del reaseguro será ${f(1 + k1r)} × ${f(Eyc)} + ${f(k2r)} × ${f(rhoc)} = ${vv(PR)}. Por consiguiente, las relaciones entre los recargos son las anteriores ${shift < 0 ? 'menos' : 'más'} (${f(PR)} − ${f(rhoc)})/${f(rho)} = ${f(Math.abs(shift))}, es decir,` + eq(relTxt(shift)) +
+        R.ans('Con reaseguro.', `El riesgo cedido es y<sub>c</sub> = ${T.treatyToString(yc)}, con 𝔼(y<sub>c</sub>) = ${f(Eyc)} y ${rn(sp, '−y<sub>c</sub>')} = ${f(rhoc)}. ${otraR ? `La reaseguradora mide el riesgo con ${rn(spR, '−y<sub>c</sub>')} = ${f(rhocR)}, así que el` : 'El'} precio del reaseguro será ${f(1 + k1r)} × ${f(Eyc)} + ${f(k2r)} × ${f(rhocR)} = ${vv(PR)}. Por consiguiente, las relaciones entre los recargos son las anteriores ${shift < 0 ? 'menos' : 'más'} (${f(PR)} − ${f(rhoc)})/${f(rho)} = ${f(Math.abs(shift))}, es decir,` + eq(relTxt(shift)) +
           `Se obtiene (k₁; k₂) = (${vv(e1.k1)}; 0) y (0; ${vv(e1.k2)}). La prima de la cartera será ${f(rho)} ${PR - rhoc < 0 ? '−' : '+'} ${f(Math.abs(PR - rhoc))} = ${vv(Pt)}${c ? `, y para cada póliza k₂ se multiplica por ${f(c)}: k₂ = ${vv(e1.k2 * c)}` : ''}. ${conv ? 'El reaseguro abarata la prima, así que conviene a la cedente.' : 'El reaseguro encarece la prima.'}`);
         if (c) R.key('k2Rep', e1.k2 * c);
         polTable('Con reaseguro', Pt, 're');
@@ -247,6 +253,14 @@
       return R;
     },
     examples: [
+      { id: 'nov10-g', label: 'Clase 10 nov. 2026 · g) · 5.000 pólizas (𝔼 = 2,275; σ = 4,2892), CVaR 95 %', values: { src: 'tabla', m_rho: 'CVaR', m_lvl: '95', R0: '0', r01o: '1,6448536269514715', k1: '', cart: [{ n: '5000', E: '2,275', s: '4,289157842747222', r: '15,819965325458567' }], reOn: false, invOn: false },
+        expect: [{ k: 'rho', l: 'Prima de la cartera', v: 11873.86644, src: 'macro D' }, { k: 'k1max', l: 'Recargo de seguridad máx.', v: 0.0438563902 }, { k: 'k2max', l: 'Recargo por riesgo máx.', v: 0.0420138159 }, { k: 'c', l: 'Coeficiente de reducción', v: 0.1501124205 }], note: 'Ejercicio de clase del 10 nov. 2026 (no es de examen). La solución (macros D y F) usa ρ(0,1) = 1,6449, el del VaR<sub>95%</sub>, aunque pide CVaR<sub>95%</sub>; se pone ese valor en «ρ(0,1) a usar» para reproducirla. Para el CVaR correcto, borra ese campo.' },
+      { id: 'nov10-h', label: 'Clase 10 nov. 2026 · h) · reaseguro 0,8Y − 0,4(Y − 11.000)⁺, reaseguradora 1,01𝔼 + 0,01·VaR₉₅', values: { src: 'tabla', m_rho: 'CVaR', m_lvl: '95', R0: '0', r01o: '1,6448536269514715', k1: '', cart: [{ n: '5000', E: '2,275', s: '4,289157842747222', r: '15,819965325458567' }], reOn: true, re: '0,8y − 0,4(y − 11.000)+', reT: 'c', k1r: '0,01', k2r: '0,01', mrOn: true, mr_rho: 'VaR', mr_lvl: '95', invOn: false },
+        expect: [{ k: 'primaRe', l: 'Nueva prima', v: 11895.78615, src: 'solución (con 𝔼, VaR y CVaR cedidos de la macro C)' }], note: 'Ejercicio de clase del 10 nov. 2026 (no es de examen). La solución (macros D y F) usa ρ(0,1) = 1,6449, el del VaR<sub>95%</sub>, aunque pide CVaR<sub>95%</sub>; se pone ese valor en «ρ(0,1) a usar» para reproducirla. Para el CVaR correcto, borra ese campo. La solución toma de la macro C 𝔼(y<sub>c</sub>) = 8.944,53, VaR = 8.997,99 y CVaR = 9.102,04; ese VaR no cuadra con VaR<sub>95%</sub>(−y<sub>c</sub>) = 0,8·VaR − 0,4·(VaR − 11.000) de la normal, de ahí la diferencia. En ambos casos el reaseguro no compensa.' },
+      { id: 'nov10-i', label: 'Clase 10 nov. 2026 · i) · inversión en dos índices (5 %, 9 %) y (8 %, 12 %), correlación 0,2', values: { src: 'tabla', m_rho: 'CVaR', m_lvl: '95', R0: '0', r01o: '1,6448536269514715', k1: '', cart: [{ n: '5000', E: '2,275', s: '4,289157842747222', r: '15,819965325458567' }], reOn: false, invOn: true, r0: '0', act: [{ mu: '5%', sd: '9%' }, { mu: '8%', sd: '12%' }], corr: '1-2: 0,2' },
+        expect: [{ k: 'x0', l: 'Peso activo sin riesgo', v: 0.8278509123, src: 'macro F' }, { k: 'x1', l: 'Peso índice 1', v: 0.0866445739 }, { k: 'x2', l: 'Peso índice 2', v: 0.0855045137 }, { k: 'rhoR', l: 'Riesgo actuarial + financiero', v: -61.94045111 }, { k: 'primaInv', l: 'Nueva prima de la cartera', v: 11811.92599 }], note: 'Ejercicio de clase del 10 nov. 2026 (no es de examen). La solución (macros D y F) usa ρ(0,1) = 1,6449, el del VaR<sub>95%</sub>, aunque pide CVaR<sub>95%</sub>; se pone ese valor en «ρ(0,1) a usar» para reproducirla. Para el CVaR correcto, borra ese campo.' },
+      { id: 'nov10-j', label: 'Clase 10 nov. 2026 · j) · la mitad con franquicia anual 5', values: { src: 'tabla', m_rho: 'CVaR', m_lvl: '95', R0: '0', r01o: '1,6448536269514715', k1: '', cart: [{ n: '2500', E: '2,275', s: '4,289157842747222', r: '15,819965325458567' }, { n: '2500', E: '0,6368078762429434', s: '3,30753588354234', r: '10,81996532545859' }], reOn: false, invOn: false },
+        expect: [{ k: 'rho', l: 'Prima de la cartera', v: 7724.973481, src: 'macro D' }, { k: 'k1max', l: 'Recargo de seguridad máx.', v: 0.0611927448 }, { k: 'c1_1', l: 'Prima póliza sin franquicia (k₂ = 0)', v: 2.414213494 }, { k: 'c1_2', l: 'Prima póliza con franquicia (k₂ = 0)', v: 0.6757758981 }, { k: 'c3_1', l: 'Prima póliza sin franquicia (k₁ = 0)', v: 2.38081204 }, { k: 'c3_2', l: 'Prima póliza con franquicia (k₁ = 0)', v: 0.7091773524 }], note: 'Ejercicio de clase del 10 nov. 2026 (no es de examen). La solución (macros D y F) usa ρ(0,1) = 1,6449, el del VaR<sub>95%</sub>, aunque pide CVaR<sub>95%</sub>; se pone ese valor en «ρ(0,1) a usar» para reproducirla. Para el CVaR correcto, borra ese campo.' },
       { id: 'oct20-p', label: 'Clase 20 oct. 2026 · 5.000/2.000/2.000/1.000 pólizas, CVaR 95 %, k₁ = 15 %, reparto 75 % coste / 25 % riesgo', values: { src: 'tabla', cart: [{ n: '5000', E: '5', s: '30', r: '200' }, { n: '2000', E: '8', s: '50', r: '400' }, { n: '2000', E: '10', s: '70', r: '800' }, { n: '1000', E: '20', s: '200', r: '1400' }], m_rho: 'CVaR', m_lvl: '95', R0: '0', r01o: '2,06323586', k1: '0,15', wE: '0,75', reOn: false, invOn: false },
         expect: [{ k: 'rho', l: 'Prima de la cartera', v: 96888.25583, src: 'hoja Oct_20_I' }, { k: 'k1max', l: 'Recargo de seguridad', v: 0.1961513065 }, { k: 'k2max', l: 'k₂ (k₁ = 0)', v: 0.1639853633 }, { k: 'k2g', l: 'k₂ con k₁ = 0,15', v: 0.0385831678 }, { k: 'c', l: 'Precio unidad de riesgo ρ/Σρᵢ', v: 0.0201850533 }, { k: 'mix_1', l: 'Prima mixta póliza 1', v: 5.494820064 }, { k: 'mix_4', l: 'Prima mixta póliza 4', v: 25.00703825 }], note: 'Hoja de clase (no es de examen). Usa φ con 2π ≈ 6,28, por eso se pone ρ(0,1) = 2,06323586.' },
       { id: 'oct20-cp', label: 'Clase 20 oct. 2026 · cuota-parte 30 % cedido, PPVE 10 %', values: { src: 'tabla', cart: [{ n: '5000', E: '5', s: '30', r: '200' }, { n: '2000', E: '8', s: '50', r: '400' }, { n: '2000', E: '10', s: '70', r: '800' }, { n: '1000', E: '20', s: '200', r: '1400' }], m_rho: 'CVaR', m_lvl: '95', R0: '0', r01o: '2,06323586', k1: '0,15', reOn: true, re: '0,3y', reT: 'c', k1r: '0,1', k2r: '0', invOn: false },
