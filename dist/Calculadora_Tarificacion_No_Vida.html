@@ -1775,7 +1775,7 @@ const UI = (function () {
       // Si se han cambiado los datos respecto del ejemplo, no mostrar la comparación
       const exOk = ex && JSON.stringify(Object.assign(defaults(t), ex.values)) === JSON.stringify(valsOf(t)) ? ex : null;
       if (!exOk) delete state.lastEx[t.id];
-      state.lastRes[t.id] = r;
+      state.lastRes[t.id] = r; window.__TNV_LAST = r;   // para las pruebas automáticas
       resBox.innerHTML = '';
       resBox.append(renderResult(t, r, exOk));
       resBox.classList.remove('busy');
@@ -3543,7 +3543,8 @@ const P = (function () {
       {
         id: 'j23-2c', label: 'Junio 2023 · Ej. 2c · capa (y − 950.000)+ − (y − 1.150.000)+, CVaR 94 %, 1,02𝔼',
         values: { y_src: 'cont', y_c_fam: 'normal', y_c_normal_p_m: '1.100.000', y_c_normal_p_s: '21.621,74831', m_rho: 'CVaR', m_lvl: '94', R0: '0', trs: [{ e: '(y − 950.000)+ − (y − 1.150.000)+', t: 'c' }], k1: '0,02', k2: '0' },
-        expect: [{ k: 'rhoY', l: 'CVaR<sub>94%</sub>(−y)', v: 1142927.457 }, { k: 'rhor', l: 'Riesgo retenido', v: 951388.4048, src: 'capas simuladas' }, { k: 'Pr', l: 'Prima del reaseguro', v: 149698.3965 }, { k: 'prima', l: 'Prima del seguro directo', v: 1101086.801 }]
+        expect: [{ k: 'rhoY', l: 'CVaR<sub>94%</sub>(−y)', v: 1142927.457 }, { k: 'rhor', l: 'Riesgo retenido', v: 951388.4048, src: 'capas simuladas' }, { k: 'Eyc', l: '𝔼(y<sub>c</sub>)', v: 149698.3965, src: 'simulado' }, { k: 'Pr', l: 'Prima del reaseguro 1,02𝔼(y<sub>c</sub>)', v: 1.02 * 149698.3965, src: 'corregida' }, { k: 'prima', l: 'Prima del seguro directo', v: 951388.4048 + 1.02 * 149698.3965, src: 'corregida' }],
+        note: '<b>Errata en la solución oficial:</b> escribe «1,02 × (149.764,5943 − 66,19781827) = 149.698,3965», pero ese producto vale 152.692,36 (olvida el 1,02); por eso su prima del seguro directo (1.101.086,80) es menor de lo debido: con el 1,02 sale 1.104.080,76. Además 𝔼((y − 950.000)<sup>+</sup>) es exactamente 150.000 (la solución lo simula: 149.764,59).'
       },
       {
         id: 'j24-2c', label: 'Junio 2024 · Ej. 2c · 0,9y − 0,6(y − 2.450.000)+, SW₁',

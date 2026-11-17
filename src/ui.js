@@ -502,7 +502,7 @@ const UI = (function () {
       // Si se han cambiado los datos respecto del ejemplo, no mostrar la comparación
       const exOk = ex && JSON.stringify(Object.assign(defaults(t), ex.values)) === JSON.stringify(valsOf(t)) ? ex : null;
       if (!exOk) delete state.lastEx[t.id];
-      state.lastRes[t.id] = r;
+      state.lastRes[t.id] = r; window.__TNV_LAST = r;   // para las pruebas automáticas
       resBox.innerHTML = '';
       resBox.append(renderResult(t, r, exOk));
       resBox.classList.remove('busy');
