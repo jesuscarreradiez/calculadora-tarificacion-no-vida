@@ -49,7 +49,7 @@ def risk_q(qz, meas, f=lambda x: x):
         return optimize.brentq(g, xs.min(), xs.max())
     if typ == 'CVaR':
         z0 = stats.norm.ppf(1 - par)
-        val = integrate.quad(lambda z: float(f(qz(np.array(z)))) * stats.norm.pdf(z), z0, np.inf, limit=400, epsabs=0, epsrel=1e-11)[0]
+        val = integrate.quad(lambda z: float(f(qz(np.array(z)))) * stats.norm.pdf(z), z0, 8.3, limit=400, epsabs=0, epsrel=1e-11)[0]
         return val / par
     xs = f(qz(Z))
     return np.trapezoid(xs * w_of(meas) * PHIZ, Z)
@@ -337,6 +337,69 @@ for i in range(6):      # Mixturas con parámetro continuo + Bühlmann
     vals = {'cond': cond, 'bh': str(h), 'bxb': ES(xb)}; vals.update(lv)
     z = h / (h + Ev / Ve)
     add('MX-%02d' % i, 't3-mixtura', vals, {'E': (EL, 'exact'), 'V': (Ev + Ve, 'exact'), 'I': (Ve / Ev, 'exact'), 'Eb': (z * xb + (1 - z) * EL, 'exact')})
+
+# ───────────────────────── Preguntas adicionales de examen ─────────────────────────
+# Práctico 2: k mínimo, ganar ≥ f·Π, condicionar a N, cartera de n pólizas, n mínimo, segunda prima, prima de referencia
+for i in range(10):
+    fv, fr = rand_freq(); sv_vals, sv = rand_sev(allow_mix=False)
+    if sv_vals['S_fam'] in ('pareto', 'discreta'): continue
+    meas = ('CVaR', float(rng.choice([0.05, 0.1]))); A, B = round(float(rng.uniform(1, 1.2)), 2), round(float(rng.uniform(0.02, 0.1)), 3)
+    eps, gf, A2, B2, refP = round(float(rng.uniform(0.05, 0.3)), 2), round(float(rng.uniform(0.2, 0.8)), 2), round(float(rng.uniform(1.05, 1.3)), 2), 0.0, None
+    n = int(rng.integers(100, 5000)); epsN = round(float(rng.uniform(0.01, 0.1)), 3)
+    vals = dict(fv); vals.update(sv_vals); vals.update(meas_vals('m_', meas)); vals.update({'A': ES(A), 'B': ES(B), 'A2': ES(A2), 'B2': '0', 'eps': ES(eps), 'gfrac': ES(gf), 'ncond': '1', 'n': str(n), 'epsN': ES(epsN)})
+    y = agg_sample(fr, sv); EN, VN = freq_moments(fr); e1, e2 = sev_moments_pay(sv, 0, math.inf); E = EN * e1; sd = math.sqrt(EN * (e2 - e1 * e1) + VN * e1 * e1)
+    rho = risk_sample(y, meas); Pi = A * E + B * rho
+    refP = round(Pi * float(rng.uniform(0.8, 1.2)), 2); vals['refP'] = ES(refP)
+    r01 = std_rho(meas); mN, sN = n * E, math.sqrt(n) * sd
+    ref = {'prima2': (A2 * E, 'exact'), 'ploss2': (float((y > A2 * E).mean()), 'prob'), 'red': ((refP - Pi) / refP, 'mc'),
+           'kmin': ((np.quantile(y, 1 - eps) - B * rho) / E - 1, 'mc'), 'pgan': (float((y <= (1 - gf) * Pi).mean()), 'prob'),
+           'rhoCart': (mN + r01 * sN, 'mc'), 'plossCart': (float(stats.norm.sf((n * Pi - mN) / sN)), 'prob')}
+    if Pi > E:
+        ref['nP'] = (math.ceil((sd * stats.norm.ppf(1 - epsN) / (Pi - E)) ** 2 - 1e-9), 'mc'); ref['nR'] = (math.ceil((sd * r01 / (Pi - E)) ** 2 - 1e-9), 'mc')
+    # IP(y ≤ (1 − f)Π | N = 1) = F_S((1 − f)Π)
+    ref['pcond'] = (float(sv.cdf((1 - gf) * Pi)), 'prob')
+    add('P2X-%02d' % i, 't3-agregado', vals, ref)
+# Práctico 1: reservas, normal dada, riesgo retenido, tramos, reaseguradora con otra medida
+for i in range(8):
+    m, s = round(float(rng.uniform(1e5, 5e6)), 0), None; s = round(m * float(rng.uniform(0.02, 0.2)), 0); R0 = round(float(rng.uniform(0, 0.05)) * m, 0)
+    meas = rand_meas(['VaR', 'CVaR', 'Wang']); r01 = std_rho(meas); rho = m + r01 * s; P0 = rho - R0
+    vals = {'src': 'normal', 'm': ES(m), 's': ES(s), 'sumR': '', 'R0': ES(R0), 'r01o': '', 'k1': ''}; vals.update(meas_vals('m_', meas))
+    ref = {'rho': (rho, 'exact'), 'prima': (P0, 'exact'), 'k1max': (P0 / m - 1, 'exact'), 'k2max': ((P0 - m) / rho, 'exact')}
+    kind = rng.integers(3); k1r, k2r = round(float(rng.uniform(0, 0.1)), 3), round(float(rng.uniform(0, 0.1)), 3)
+    if kind == 0:   # el enunciado da el retenido y_r = a·y − b(y − U)⁺
+        a, b = round(float(rng.uniform(0.5, 0.9)), 2), round(float(rng.uniform(0.2, 0.5)), 2); U = round(m + s * float(rng.uniform(-0.5, 1.5)), -2)
+        txt = '%sy − %s(y − %s)+' % (ES(a), ES(b), ES(U)); a0, lay = 1 - a, [(b, U)]; vals.update({'reOn': True, 're': txt, 'reT': 'r'})
+    elif kind == 1: # tramos de pendiente
+        U = round(m + s * float(rng.uniform(-0.5, 1.5)), -2); p1, p2 = round(float(rng.uniform(0.1, 0.4)), 2), round(float(rng.uniform(0.4, 0.8)), 2)
+        txt = 'tramos: 0:%s; %s:%s' % (ES(p1), ES(U), ES(p2)); a0, lay = p1, [(p2 - p1, U)]; vals.update({'reOn': True, 're': txt, 'reT': 'c'})
+    else:           # reaseguradora con VaR mientras la cedente usa otra medida
+        U = round(m + s * float(rng.uniform(-0.5, 1.5)), -2); a = round(float(rng.uniform(0.3, 0.8)), 2)
+        txt = '%sy − %s(y − %s)+' % (ES(a), ES(round(a / 2, 2)), ES(U)); a0, lay = a, [(-round(a / 2, 2), U)]; vals.update({'reOn': True, 're': txt, 'reT': 'c', 'mrOn': True, 'mr_rho': 'VaR', 'mr_lvl': '95'})
+    vals.update({'k1r': ES(k1r), 'k2r': ES(k2r), 'invOn': False})
+    Eyc = a0 * m + sum(a * normal_SL(m, s, U) for a, U in lay); rhoc = a0 * rho + sum(a * normal_layer(m, s, meas, U) for a, U in lay)
+    rhocR = rhoc
+    if kind == 2: rhocR = risk_q(lambda z: m + s * z, ('VaR', 0.05), lambda x: a0 * x + sum(aa * np.maximum(x - U, 0) for aa, U in lay))
+    PR = (1 + k1r) * Eyc + k2r * rhocR; Pt = P0 + PR - rhoc
+    ref.update({'Eyc': (Eyc, 'exact'), 'rhoc': (rhoc, 'num'), 'PR': (PR, 'num'), 'primaRe': (Pt, 'num')})
+    add('P1X-%02d' % i, 't8-recargos', vals, ref)
+# Práctico 3: beta para IP(N ≤ k), clásica, mixtura con σ(y) simulada y años para un descuento
+for i in range(4):
+    lam = round(float(rng.uniform(0.5, 1.5)), 2); k = int(rng.integers(1, 4)); v = round(float(rng.uniform(1, 5)), 2); h = int(rng.integers(3, 7)); obs = rng.poisson(lam, h).tolist(); P = stats.poisson(lam)
+    rows = [{'n': str(n), 'u': ES(v * P.pmf(n) / (1 - P.pmf(n))), 'v': ES(v)} for n in range(k + 1)]
+    post = [(v * P.pmf(n) / (1 - P.pmf(n)) + obs.count(n)) / (v * P.pmf(n) / (1 - P.pmf(n)) + v + h) for n in range(k + 1)]
+    p, ps, w = sum(P.pmf(n) for n in range(k + 1)), sum(post), sum(1 for o in obs if o <= k)
+    if abs(ps - p) < 1e-9: continue
+    vg = (w - ps * h) * (1 - p) / (ps - p); ug = p * vg / (1 - p); snk = sum(n * P.pmf(n) for n in range(k + 1)); Eg = ps / p * snk + (1 - ps) / (1 - p) * (lam - snk)
+    add('BG-%d' % i, 't10-cred', {'modo': 'beta', 'noPri': False, 'N_fam': 'poisson', 'N_poisson_p_lam': ES(lam), 'bt': rows, 'obs': '; '.join(map(str, obs)), 'grp': True}, {'uG': (ug, 'exact'), 'vG': (vg, 'exact'), 'Eg': (Eg, 'exact')})
+for i in range(3):
+    m, s, th, be, h, xb = round(float(rng.uniform(1, 100)), 2), None, 0.05, 0.9, int(rng.integers(10, 2000)), None; s = round(m * float(rng.uniform(0.5, 3)), 2); xb = round(m * float(rng.uniform(0.6, 1.4)), 2)
+    z = min(1, (m / s) * th * math.sqrt(h) / stats.norm.ppf((1 + be) / 2))
+    add('CL-%d' % i, 't10-cred', {'modo': 'clas', 'cm': ES(m), 'cs': ES(s), 'cth': '0,05', 'cbe': '0,9', 'hN': str(h), 'mN': ES(xb)}, {'z': (z, 'exact'), 'va': (z * (xb - m) / m, 'exact')})
+for i in range(3):
+    mL, sL = round(float(rng.uniform(50, 200)), 1), None; sL = round(mL * float(rng.uniform(0.05, 0.2)), 1); sdy = round(math.sqrt(mL ** 2 + sL ** 2 + mL ** 2 + sL ** 2) * float(rng.uniform(0.98, 1.02)), 2); tg = round(float(rng.uniform(0.1, 0.4)), 2)
+    Ve = sL ** 2; Ev2 = sdy ** 2 - Ve
+    add('MXS-%d' % i, 't3-mixtura', {'cond': 'exponencial', 'L_fam': 'normal', 'L_normal_p_m': ES(mL), 'L_normal_p_s': ES(sL), 'sdy': ES(sdy), 'bh': '10', 'bxb': '0', 'btg': ES(tg)},
+        {'I2': (Ve / Ev2, 'exact'), 'Eb': (mL * (1 - 10 / (10 + Ev2 / Ve)), 'exact'), 'hTarget': (Ev2 / Ve * tg / (1 - tg), 'exact')})
 
 # ───────────────────────── Ejecutar y comparar ─────────────────────────
 inp, outp = '/tmp/claude-0/-home-user/9451f465-8866-565a-82e6-9cb62b052902/scratchpad/vcases.json', '/tmp/claude-0/-home-user/9451f465-8866-565a-82e6-9cb62b052902/scratchpad/vout.json'
