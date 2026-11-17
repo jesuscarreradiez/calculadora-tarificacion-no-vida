@@ -100,3 +100,9 @@ engine.js (numérica, distribuciones, medidas, FFT/Panjer, MC) · ui.js (formula
 - Exámenes enlazados: J26-3, E26-2a/b/c, J25-4c, E25-3a/b/c, J24-4, E24-4, E23-4b/c, E22-4b, E20-4a-b/4c, E18-4a/b, E17-4b, E16-4a/b, E15-4, E14-4a/b; clases 4 nov. (Poisson–Gamma + CVaR), Calculos/Ejemplo (betas por n), Ejemplo_Bulhmann, Bluhmann_Ejemplo, Nov_10_III.
 - Erratas: E26-2c (Bühlmann da 1,3846 y −30,77 %, no 1,0769); E26-2b (prima con 𝔼(N)); E25-3b compone Poisson con la media (no la BN); fórmula de v en Ejemplo d).
 - test/t10.js: 10 casos inventados contra cálculo independiente (todos OK).
+
+## Verificación completa (nov. 2026)
+- test/e2e.js: todos los ejemplos de examen de los Prácticos 1–3 sin errores; las diferencias restantes con las soluciones oficiales son simulación del profesor o erratas documentadas en cada ejemplo (nuevas: J23-2c olvida el 1,02 en la prima del reaseguro; E26-2c Bühlmann).
+- E18-2 en Recargos usa el SW₂ simulado del profesor (ρ(0,1) = 2,444668919).
+- test/varied.py (semillas 7, 11, 23): 430 enunciados inventados (otras distribuciones de N y S, tablas de 2–6 valores, franquicias, límites, franquicia anual, mixturas de severidad, carteras de 1–5 tipos, 7 medidas, 5 tipos de tratado, retenido, tramos, reaseguradora con otra medida, reservas, inversión con 1–3 activos, Gamma–Poisson, betas, beta para N ≤ k, Bühlmann por momentos, grupos de 2–4 tipos con 2–5 valores, mixturas continuas, clásica). 2.625 comprobaciones contra referencias independientes (fórmulas, integración numérica, Monte Carlo propio de 2·10⁶): 0 errores de la app; las 2 discrepancias de la semilla 23 eran ruido de la simulación de referencia (verificadas con el cálculo exacto).
+- Uso: python3 test/varied.py <semilla> (ejecuta test/runcases.js sobre dist/).
