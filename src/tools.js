@@ -738,7 +738,7 @@
           return { nom: String(r.nom || 'Tipo ' + (i + 1)), p, E, sd };
         }) : [];
         if (!ts.length) throw new Error('Añade al menos un tipo de siniestro.');
-        const sp = ts.reduce((a, t) => a + t.p, 0); if (Math.abs(sp - 1) > 1e-6) throw new Error(`Las probabilidades de los tipos suman ${f(sp)}.`);
+        const nPm = P.normP(ts.map(t => t.p), 'los tipos de siniestro'); ts.forEach((t, i) => { t.p = nPm.ps[i]; }); if (nPm.note) R.warn(nPm.note.trim());
         ES = ts.reduce((a, t) => a + t.p * t.E, 0);
         const Vm = ts.reduce((a, t) => a + t.p * t.E * t.E, 0) - ES * ES, Ev = ts.reduce((a, t) => a + t.p * t.sd * t.sd, 0);
         VS = Vm + Ev;
@@ -846,7 +846,7 @@
       R.ans('Varianza.', `σ²(y) = 𝔼(σ²(y|Λ)) + σ²(𝔼(y|Λ)), con ${C.txt}. Como 𝔼(Λ) = ${f(EL)} y 𝔼(Λ²) = ${f(EL2)}, se obtiene 𝔼(σ²(y|Λ)) = ${vv(Ev)} y σ²(𝔼(y|Λ)) = ${vv(Ve)}, luego σ²(y) = ${vv(Vy)} y σ(y) = ${vv(Math.sqrt(Vy))}.`);
       R.uses('mixt28');
       R.ans('Índice de mixtura.', `I = σ²(𝔼(y|Λ))/𝔼(σ²(y|Λ)) = ${f(Ve)}/${f(Ev)} = ${vv(I)}. ${I < 0.1 ? 'Es pequeño: la cartera es bastante homogénea.' : 'Indica una heterogeneidad apreciable entre asegurados, que justifica un sistema <i>bonus–malus</i>.'}`);
-      R.ans('Simulación (si la piden).', `Para simular y: (1) se genera un valor λ de Λ (${Lb.ex.split(':')[0].replace(/<[^>]+>/g, '')}) — p. ej. por inversión, λ = F<sub>Λ</sub><sup>−1</sup>(u) con u ∼ U(0, 1)${Lb.fam === 'normal' ? ', descartando valores no positivos' : ''}; (2) dado λ, se genera y|λ (${C.lab}), p. ej. también por inversión con otro uniforme independiente; (3) se repite M veces (p. ej. M = 100.000) y se estiman 𝔼(y) y σ(y) con la media y la desviación muestrales, y el índice de mixtura con I = σ²(𝔼(y|Λ))/(σ̂²(y) − σ²(𝔼(y|Λ))).`);
+      R.ans('Simulación (si la piden).', `Para simular y: (1) se genera un valor λ de Λ (${Lb.ex.split(':')[0].replace(/<[^>]+>/g, '').replace(/^y ∼/, 'Λ ∼').replace(/\.$/, '')}) — p. ej. por inversión, λ = F<sub>Λ</sub><sup>−1</sup>(u) con u ∼ U(0, 1)${Lb.fam === 'normal' ? ', descartando valores no positivos' : ''}; (2) dado λ, se genera y|λ (${C.lab}), p. ej. también por inversión con otro uniforme independiente; (3) se repite M veces (p. ej. M = 100.000) y se estiman 𝔼(y) y σ(y) con la media y la desviación muestrales, y el índice de mixtura con I = σ²(𝔼(y|Λ))/(σ̂²(y) − σ²(𝔼(y|Λ))).`);
       if (V.s('cond') === 'poisson' && Lb.fam === 'gamma') R.note(`Poisson–Gamma: N ∼ BN(α = ${f(Lam.al)}; θ = 1/(1+β) = ${f(1 / (1 + Lam.be))}) y el índice de mixtura es β = ${f(Lam.be)} (ec. 29).`);
       if (Lb.fam === 'normal' && Lam.cdf(0) > 1e-6) R.warn(`Λ normal toma valores negativos con probabilidad ${f(Lam.cdf(0))}; el cálculo usa sólo sus momentos.`);
       const sdy = V.nOpt('sdy');
@@ -920,9 +920,10 @@
         const w = T.parseNum(r.w); if (!(w >= 0)) throw new Error(`Peso no válido en el tipo ${i + 1}.`);
         const ps = String(r.p || '').split(/[;|]+/).map(s => s.trim()).filter(Boolean).map(T.parseNum);
         if (ps.length !== xs.length || ps.some(isNaN)) throw new Error(`El tipo ${i + 1} debe tener ${xs.length} probabilidades.`);
-        const s = ps.reduce((a, b) => a + b, 0); if (Math.abs(s - 1) > 1e-6) throw new Error(`Las probabilidades del tipo ${i + 1} suman ${f(s)}.`);
-        return { w, w0: w, ps };
+        const nP = P.normP(ps, `el tipo ${i + 1}`);
+        return { w, w0: w, ps: nP.ps, note: nP.note };
       });
+      tipos.forEach(t => { if (t.note) R.warn(t.note.trim()); });
       const cS = V.n('sevc'), ys = xs.map(x => x * cS), yl = cS === 1 ? 'N' : 'y';
       if (!tipos.length) throw new Error('Añade al menos un tipo.');
       const sw = tipos.reduce((a, t) => a + t.w, 0); tipos.forEach(t => t.w /= sw);
@@ -944,7 +945,7 @@
       R.table(`Cuadro por tipo de asegurado (y = ${cS === 1 ? 'N' : f(cS) + '·N'})`, ['Tipo', 'Pólizas / peso', 'Coste esperado', 'Desviación', rn(sp)], tipos.map((t, i) => [String(i + 1), t.w0, per[i].Dt.mean, per[i].Dt.sd, per[i].rho]), { top: true });
       per.forEach((x, i) => R.key('Et' + (i + 1), x.Dt.mean).key('sdt' + (i + 1), x.Dt.sd).key('rt' + (i + 1), x.rho));
       R.step('Coste de cada tipo', `Para cada tipo, y = ${cS === 1 ? 'N' : f(cS) + '·N'} toma los valores ${ys.map(y => f(y)).join(', ')}:` + eq(tipos.map((t, i) => `Tipo ${i + 1}: 𝔼(y) = ${f(per[i].Dt.mean)}, σ(y) = ${f(per[i].Dt.sd)}, ${rn(sp)} = ${vv(per[i].rho)}`).join('<br>')));
-      R.ans('Cuadro por tipo.', `Para cada grupo, ${tipos.map((t, i) => `𝔼(y|G${i + 1}) = ${f(per[i].Dt.mean)}, σ(y|G${i + 1}) = ${f(per[i].Dt.sd)} y ${rn(sp)} = ${vv(per[i].rho)}`).join('; ')}. El cuadro pedido es el de arriba (pólizas, coste esperado, desviación, riesgo).`);
+      R.ans('Cuadro por tipo.', `Para cada grupo (con y = ${cS === 1 ? 'N' : f(cS) + '·N'}), el coste esperado es 𝔼(y|G) = Σ y·IP(y|G), la desviación σ(y|G) = √(Σ y²·IP(y|G) − 𝔼(y|G)²) y el riesgo ${rn(sp)} se obtiene de la distribución del grupo. El cuadro pedido es:<br>${tipos.map((t, i) => `G${i + 1} (${f(t.w0)} pólizas/peso): coste esperado ${f(per[i].Dt.mean)}; desviación ${f(per[i].Dt.sd)}; ${rn(sp)} = ${vv(per[i].rho)}`).join('<br>')}.`);
       const g = analyse(tipos.map(t => t.w), 'Asegurado genérico');
       R.tile('𝔼(N) genérico', g.D.mean, { main: true }).tile(rn(sp, '−y') + ' genérico', g.rho, { main: true }).tile('Prima genérica', g.Pi).tile('Índice de mixtura', g.I);
       R.key('E', g.D.mean).key('rho', g.rho).key('prima', g.Pi).key('I', g.I);
@@ -1216,6 +1217,73 @@
       return R;
     },
     examples: [{ id: 'j26-1b', label: 'Junio 2026 · Ej. 1b · μ del expectil para recargo de seguridad del 10 %', values: { m: '1.700.000', s: '114.411,5379', fam: 'Expectil', obj: 'rec', val: '0,1' }, expect: [{ k: 'mu', l: 'μ', v: 0.019591682, src: 'interpolación lineal' }] }]
+  });
+
+  /* ═════════ T4 · λ-cuantil (Λ-VaR) ═════════ */
+  UI.tool({
+    id: 't4-lambda', tema: 4, title: 'λ-cuantil (landa-cuantil)', tag: 'suelto · Ene 2025',
+    short: 'Q<sub>λ</sub>(y) con una función λ escalonada: dónde corta F a λ, y cuándo coincide con un VaR.',
+    cuando: '«Considere la función λ(x) = … Q<sub>λ</sub> es el landa-cuantil basado en λ. Determine condiciones de F que garantizan VaR<sub>99%</sub>(y) = Q<sub>λ</sub>(y)».',
+    que: 'El λ-cuantil generaliza el VaR permitiendo que el nivel dependa del valor: Q<sub>λ</sub>(y) es el punto en el que la función de distribución F de y alcanza a λ. Si F es continua y estrictamente creciente, F(Q<sub>λ</sub>(y)) = λ(Q<sub>λ</sub>(y)) (salvo que el corte caiga justo en un salto de λ), mientras que F(VaR<sub>1−μ</sub>(y)) = μ. Por eso Q<sub>λ</sub> sólo puede coincidir con VaR<sub>1−μ</sub> si μ es uno de los valores que toma λ, y en el tramo adecuado.',
+    groups: [
+      {
+        title: 'Función λ escalonada', fields: [
+          { id: 'lam', type: 'rows', label: 'Una fila por tramo: «desde x» (el primero, −∞) y el valor de λ en ese tramo', cols: [{ id: 'desde', label: 'Desde x', type: 'text' }, { id: 'val', label: 'λ(x)' }], def: [{ desde: '−∞', val: '0,01' }, { desde: '−2', val: '0,05' }], wide: true },
+          { id: 'niv', type: 'text', label: 'Niveles del VaR a estudiar (%)', def: '99; 90', help: 'p. ej. 99; 95; 90', wide: true }
+        ]
+      },
+      { title: 'Distribución F de y (opcional, para calcular Q<sub>λ</sub>)', optional: true, openIf: v => v.dOn, fields: [{ id: 'dOn', type: 'check', label: 'Calcular Q<sub>λ</sub> con una distribución concreta', def: false, wide: true }, ...P.withShow(P.famFields('d_', P.CF, P.CF_ALL, 'normal'), v => v.dOn)] }
+    ],
+    solve(V, { result }) {
+      const R = result();
+      const segs = (V.raw.lam || []).map((r, i) => {
+        const t = String(r.desde || '').trim(); const a = (i === 0 && /^[−-]?\s*(∞|inf)/i.test(t)) || t === '' ? -Infinity : T.parseNum(t);
+        const v = T.parseNum(r.val); if (isNaN(a) || !(v > 0 && v < 1)) throw new Error(`Revisa el tramo ${i + 1} de λ.`); return { a, v };
+      }).sort((x, y) => x.a - y.a);
+      if (!segs.length) throw new Error('Añade al menos un tramo de λ.');
+      segs.forEach((g, i) => { g.b = i + 1 < segs.length ? segs[i + 1].a : Infinity; });
+      const xs = x => (isFinite(x) ? f(x) : (x < 0 ? '−∞' : '+∞'));
+      const tramo = g => `${isFinite(g.a) ? xs(g.a) + ' ≤ ' : ''}x${isFinite(g.b) ? ' < ' + xs(g.b) : ''}`;
+      R.step('Función λ', eq(segs.map(g => `λ(x) = ${f(g.v)} si ${tramo(g)}`).join('<br>')));
+      R.uses('lam42');
+      R.ans('Planteamiento.', `λ toma los valores ${segs.map(g => `${f(g.v)} (si ${tramo(g)})`).join(' y ')}. Como F es continua y estrictamente creciente, el λ-cuantil Q<sub>λ</sub>(y) es el punto en el que F alcanza a λ: F(Q<sub>λ</sub>(y)) = λ(Q<sub>λ</sub>(y)) (si el corte no cae en un salto de λ). Por otro lado, F(VaR<sub>1−μ</sub>(y)) = μ. Por tanto, Q<sub>λ</sub>(y) = VaR<sub>1−μ</sub>(y) si y sólo si F(Q<sub>λ</sub>(y)) = μ.`);
+      const lv = V.list('niv', { opt: true });
+      lv.forEach(L => {
+        const lvl = L >= 1 ? L / 100 : L, mu = Math.round((1 - lvl) * 1e12) / 1e12, js = segs.map((g, j) => j).filter(j => Math.abs(segs[j].v - mu) < 1e-12);
+        const nm = `VaR<sub>${T.fmtPctLevel(lvl)}</sub>(y)`;
+        if (!js.length) { R.tile(`¿${nm} = Q<sub>λ</sub>?`, 'Imposible', { main: true, hint: `λ nunca vale ${f(mu)}` }); R.ans(`¿${nm} = Q<sub>λ</sub>(y)?`, `Debería ser F(Q<sub>λ</sub>(y)) = ${f(mu)}, pero λ nunca toma el valor ${f(mu)} (sólo ${segs.map(g => f(g.v)).join(' y ')}). Por tanto, la igualdad ${nm} = Q<sub>λ</sub>(y) es imposible, cualquiera que sea F.`); return; }
+        const conds = js.map(j => {
+          const g = segs[j], prev = segs.slice(0, j);
+          const le = new Map(), gt = new Map();   // cotas de F en cada punto (se queda la más restrictiva)
+          const addLe = (x, v) => le.set(x, le.has(x) ? Math.min(le.get(x), v) : v);
+          prev.forEach(p => addLe(p.b, p.v));
+          if (isFinite(g.a)) addLe(g.a, mu);
+          if (isFinite(g.b)) gt.set(g.b, mu);
+          const c = [...[...le].map(([x, v]) => `F(${xs(x)}) ≤ ${f(v)}`), ...[...gt].map(([x, v]) => `F(${xs(x)}) > ${f(v)}`)];
+          return { tr: tramo(g), txt: c.length ? c.join(' y ') : 'ninguna condición adicional' };
+        });
+        R.tile(`¿${nm} = Q<sub>λ</sub>?`, 'Posible', { main: true, hint: 'si ' + conds.map(c => c.txt).join(' o ') });
+        R.ans(`¿${nm} = Q<sub>λ</sub>(y)?`, `Hace falta F(Q<sub>λ</sub>(y)) = ${f(mu)}, es decir, que F alcance a λ en el tramo en el que λ vale ${f(mu)} (${conds.map(c => c.tr).join(' o ')}): F<sup>−1</sup>(${f(mu)}) debe caer en ese tramo y F no debe haber alcanzado antes a λ. La condición es ${conds.map(c => c.txt).join(', o bien, ')}.${conds.length === 1 && segs.indexOf(segs[js[0]]) === 0 && isFinite(segs[0].b) ? ` Equivalentemente, F<sup>−1</sup>(${f(mu)}) < ${xs(segs[0].b)}, o sea, el percentil ${T.fmtPctLevel(mu)} de y es menor que ${xs(segs[0].b)}.` : ''}`);
+      });
+      if (V.b('dOn')) {
+        const b = P.buildFam(V, 'd_', P.CF), D = b.D;
+        let Q = null, how = '';
+        for (const g of segs) {
+          const Fa = isFinite(g.a) ? D.cdf(g.a) : 0, Fb = isFinite(g.b) ? D.cdf(g.b) : 1;
+          if (Fa > g.v) { Q = g.a; how = `en el salto de λ en x = ${f(g.a)} (F(${f(g.a)}) = ${f(Fa)} ya supera ${f(g.v)})`; break; }
+          if (Fb > g.v) { Q = D.q(g.v); how = `en el tramo ${tramo(g)}: F(x) = ${f(g.v)} ⇒ x = F<sup>−1</sup>(${f(g.v)})`; break; }
+        }
+        if (Q === null) throw new Error('Con esa distribución F nunca alcanza a λ.');
+        R.tile('Q<sub>λ</sub>(y)', Q, { main: true }).tile('F(Q<sub>λ</sub>)', D.cdf(Q)); R.key('Q', Q);
+        lv.forEach(L => { const lvl = L >= 1 ? L / 100 : L; R.tile(`VaR<sub>${T.fmtPctLevel(lvl)}</sub>(y) = F<sup>−1</sup>(${f(1 - lvl)})`, D.q(1 - lvl)); });
+        R.ans('Con la distribución dada.', `${b.ex} F alcanza a λ ${how}, así que Q<sub>λ</sub>(y) = ${vv(Q)} con F(Q<sub>λ</sub>) = ${vv(D.cdf(Q))}. ${lv.map(L => { const lvl = L >= 1 ? L / 100 : L, va = D.q(1 - lvl); return `VaR<sub>${T.fmtPctLevel(lvl)}</sub>(y) = F<sup>−1</sup>(${f(1 - lvl)}) = ${f(va)}${Math.abs(va - Q) < 1e-9 * Math.max(1, Math.abs(Q)) ? ', que coincide con Q<sub>λ</sub>' : ', distinto de Q<sub>λ</sub>'}`; }).join('; ')}.`);
+      }
+      return R;
+    },
+    examples: [
+      { id: 'e25-1', label: 'Enero 2025 · Ej. 1 · λ = 0,01 si x < −2 y 0,05 si x ≥ −2; VaR 99 % y VaR 90 %', values: { lam: [{ desde: '−∞', val: '0,01' }, { desde: '−2', val: '0,05' }], niv: '99; 90' }, note: 'Solución oficial: a) Q<sub>λ</sub>(y) = VaR<sub>99%</sub>(y) si y sólo si F(Q<sub>λ</sub>(y)) = 0,01 (es decir, F(−2) > 0,01); b) imposible, porque λ nunca vale 0,1. Abre «Distribución F» para verlo con un ejemplo numérico.' },
+      { id: 'e25-1n', label: 'Enero 2025 · Ej. 1 con un ejemplo: y ∼ N(0; 1)', values: { lam: [{ desde: '−∞', val: '0,01' }, { desde: '−2', val: '0,05' }], niv: '99; 95; 90', dOn: true, d_fam: 'normal', d_normal_p_m: '0', d_normal_p_s: '1' }, expect: [{ k: 'Q', l: 'Q<sub>λ</sub> = F<sup>−1</sup>(0,01)', v: -2.326347874, src: 'cálculo' }] }
+    ]
   });
 
   /* ═════════ T5 · Reaseguro ═════════ */

@@ -73,6 +73,7 @@ const UI = (function () {
     buhl: 'Bühlmann: h̃ = 𝔼(σ²(Θ|Λ))/σ²(𝔼(Θ|Λ)) = 1/I; z = h/(h + h̃) = hI/(hI + 1); 𝔼(Λ|Θ₁…Θ<sub>h</sub>) = z·Θ̄ + (1 − z)·𝔼(Λ) (ec. 114–116)',
     clas: 'Credibilidad clásica: z = (m/s)·θ√h/Φ<sup>−1</sup>((1 + β)/2) (si sale > 1, z = 1); prima del subgrupo z·X̄ + (1 − z)m; variación z(X̄ − m)/m (ec. 98–100)',
     redpp: 'Bonus-malus con el PPVE: % de reducción = (𝔼 a priori − 𝔼 a posteriori)/𝔼 a priori (negativo = recargo)',
+    lam42: 'λ-cuantil: Q<sub>λ</sub>(y) = inf{x : F(x) > λ(x)}; con F continua y estrictamente creciente, F(Q<sub>λ</sub>(y)) = λ(Q<sub>λ</sub>(y)), mientras que F(VaR<sub>1−μ</sub>(y)) = μ (§4.2.9)',
     mc72: 'Monte Carlo (§7.2): simular N; si N > 0 simular S₁…S<sub>N</sub> y sumar; repetir M veces; estimar 𝔼, σ, VaR (percentil) y CVaR (media de la cola)'
   };
 
@@ -290,7 +291,7 @@ const UI = (function () {
       const body = h('div', { class: 'caja-examen-body' }, r.exam.map(p => p.f && p.f.length
         ? h('div', { class: 'ce-p' }, cp(), p.lab ? h('div', { class: 'ce-lab', html: p.lab }) : null,
           h('div', { class: 'ce-f' }, p.f.map(k => h('div', { html: FORMULAS[k] }))), h('div', { html: p.html }))
-        : h('div', { class: 'ce-p' }, cp(), p.lab ? h('span', { class: 'ce-lab', html: p.lab }) : null, h('span', { html: p.html }))));
+        : h('div', { class: 'ce-p' }, cp(), p.lab ? h('span', { class: 'ce-lab', html: p.lab }) : null, p.lab ? ' ' : null, h('span', { html: p.html }))));
       if (r.pend.length) body.append(h('div', { class: 'ce-p ce-left' }, h('div', { class: 'ce-f' }, r.pend.map(k => h('div', { html: FORMULAS[k] })))));
       box.append(h('div', { class: 'caja-examen' },
         h('div', { class: 'caja-examen-header' }, h('span', null, 'Respuesta de examen — copia esto'),
@@ -337,10 +338,27 @@ const UI = (function () {
     }
     return h('div');
   }
+  // Copia la respuesta: con formato (Word/Docs conservan superíndices y subíndices) y en texto plano,
+  // donde los superíndices se escriben con ^ para que las fórmulas no queden ambiguas (θ^α, e^(m+s²/2)).
+  function answerPlain(box) {
+    const cl = box.cloneNode(true);
+    cl.querySelectorAll('button').forEach(b => b.remove());
+    const html = cl.innerHTML;
+    cl.querySelectorAll('sup').forEach(e => { const t = e.textContent; e.replaceWith(document.createTextNode(t.length > 1 ? `^(${t})` : '^' + t)); });
+    cl.querySelectorAll('.ce-lab').forEach(e => { e.textContent = e.textContent.trim() + ' '; });
+    cl.querySelectorAll('.ce-p').forEach(e => e.append(document.createTextNode('\n')));
+    const tmp = h('div', { style: { position: 'fixed', left: '-9999px', top: '0', whiteSpace: 'pre-wrap' } }); tmp.append(cl); document.body.append(tmp);
+    const txt = cl.innerText.replace(/Copiar (procedimiento|respuesta)\s*(Imprimir)?\s*/g, '').replace(/[⧉✓]\s*/g, '').replace(/[ \t]+\n/g, '\n').replace(/ {2,}/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+    tmp.remove();
+    return { html, txt };
+  }
   function copyText(box, btn) {
-    const txt = box.innerText.replace(/Copiar (procedimiento|respuesta)\s*(Imprimir)?\s*/g, '').replace(/[⧉✓]\s*/g, '').trim();
+    const { html, txt } = answerPlain(box);
     const done = () => { const o = btn.textContent; btn.textContent = '✓ Copiado'; setTimeout(() => btn.textContent = o, 1400); };
-    try { navigator.clipboard.writeText(txt).then(done, () => fallback()); } catch (e) { fallback(); }
+    try {
+      if (window.ClipboardItem && navigator.clipboard.write) navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([txt], { type: 'text/plain' }) })]).then(done, () => navigator.clipboard.writeText(txt).then(done, () => fallback()));
+      else navigator.clipboard.writeText(txt).then(done, () => fallback());
+    } catch (e) { fallback(); }
     function fallback() { const ta = h('textarea'); ta.value = txt; document.body.append(ta); ta.select(); try { document.execCommand('copy'); done(); } catch (e) { } ta.remove(); }
   }
 
@@ -533,5 +551,5 @@ const UI = (function () {
     const t0 = nav ? nav.tema : 0;
     go(t0 === 'ex' || practicoOf(t0) ? t0 : (t0 && temaOf(t0) && !temaOf(t0).off ? t0 : 0));
   }
-  return { tema, tool, practico, start, go, goTool, h, eq, v, result, TOOLS, TEMAS, PRACTICOS, toolById, practicoOfTool };
+  return { answerPlain, tema, tool, practico, start, go, goTool, h, eq, v, result, TOOLS, TEMAS, PRACTICOS, toolById, practicoOfTool };
 })();

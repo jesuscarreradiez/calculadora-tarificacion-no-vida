@@ -56,6 +56,15 @@ const P = (function () {
   const CF_POS = ['exponencial', 'gamma', 'lognormal', 'normal', 'pareto', 'weibull', 'gpd', 'wald', 'uniforme', 'beta', 'chi2', 'frechet'];
 
   /* ───────── Familias discretas sencillas ───────── */
+  // Probabilidades que no suman exactamente 1 por redondeo del enunciado (p. ej. 0,33; 0,33; 0,33):
+  // si la diferencia es pequeña se normalizan y se avisa; si es grande, error con una pista.
+  function normP(ps, what) {
+    const s = ps.reduce((a, b) => a + b, 0);
+    if (ps.some(x => x < 0)) throw new Error(`Hay probabilidades negativas en ${what}.`);
+    if (Math.abs(s - 1) <= 1e-6) return { ps, note: '' };
+    if (Math.abs(s - 1) <= 0.011) return { ps: ps.map(x => x / s), note: ` (Las probabilidades de ${what} suman ${f(s)} por redondeo; se han normalizado dividiendo entre ${f(s)}.)` };
+    throw new Error(`Las probabilidades de ${what} suman ${f(s)} y deben sumar 1. Si son fracciones, escríbelas como 1/3 en vez de 0,33.`);
+  }
   const MIXF = { lognormal: 'Log-normal', gamma: 'Gamma', exponencial: 'Exponencial', normal: 'Normal', constante: 'Constante' };
   const DF = {
     mixtura: {
@@ -64,7 +73,7 @@ const P = (function () {
         def: [{ nom: 'Leve', p: '0,8', fam: 'lognormal', E: '1', sd: '0,5' }, { nom: 'Moderado', p: '0,15', fam: 'lognormal', E: '3', sd: '2' }, { nom: 'Grave', p: '0,05', fam: 'lognormal', E: '10', sd: '10' }], wide: true }],
       build: (V, p) => {
         const rows = V.rows(p + 'mx'); if (!rows.length) throw new Error('Añade al menos un tipo de siniestro.');
-        const sp = rows.reduce((a, r) => a + r.p, 0); if (Math.abs(sp - 1) > 1e-6) throw new Error(`Las probabilidades de los tipos suman ${f(sp)} y deben sumar 1.`);
+        const nP = normP(rows.map(r => r.p), 'los tipos de siniestro'); rows.forEach((r, i) => { r.p = nP.ps[i]; });
         const comps = rows.map((r, i) => {
           const fam = r.fam || 'lognormal';
           if (fam === 'constante') return T.constant(r.E);
@@ -76,7 +85,7 @@ const P = (function () {
         });
         const D = T.mixtureDist(comps, rows.map(r => r.p));
         const Vm = rows.reduce((a, r, i) => a + r.p * comps[i].mean ** 2, 0) - D.mean ** 2, Ev = rows.reduce((a, r, i) => a + r.p * comps[i].var, 0);
-        return { D, ex: `La severidad es una mixtura: ${rows.map((r, i) => `${r.nom || 'tipo ' + (i + 1)} con probabilidad ${f(r.p)} (${MIXF[r.fam || 'lognormal'].toLowerCase()} de media ${f(r.E)} y desviación ${f(r.fam === 'exponencial' ? r.E : r.sd)})`).join('; ')}. Por (27): 𝔼(S) = Σ pᵢ𝔼ᵢ = ${f(D.mean)}; σ²(S) = varianza de medias + media de varianzas = ${f(Vm)} + ${f(Ev)} = ${f(D.var)} (σ(S) = ${f(D.sd)}).` };
+        return { D, ex: `${nP.note ? nP.note.trim() + ' ' : ''}La severidad es una mixtura: ${rows.map((r, i) => `${r.nom || 'tipo ' + (i + 1)} con probabilidad ${f(r.p)} (${MIXF[r.fam || 'lognormal'].toLowerCase()} de media ${f(r.E)} y desviación ${f(r.fam === 'exponencial' ? r.E : r.sd)})`).join('; ')}. Por (27): 𝔼(S) = Σ pᵢ𝔼ᵢ = ${f(D.mean)}; σ²(S) = varianza de medias + media de varianzas = ${f(Vm)} + ${f(Ev)} = ${f(D.var)} (σ(S) = ${f(D.sd)}).` };
       }
     },
     constante: {
@@ -92,10 +101,9 @@ const P = (function () {
       build: (V, p) => {
         const xs = V.list(p + 'dx'), ps = V.list(p + 'dp');
         if (xs.length !== ps.length) throw new Error(`Hay ${xs.length} valores y ${ps.length} probabilidades.`);
-        const s = ps.reduce((a, b) => a + b, 0);
-        if (Math.abs(s - 1) > 1e-6) throw new Error(`Las probabilidades suman ${f(s)} y deben sumar 1.`);
-        const D = T.discreteTable(xs, ps);
-        return { D, ex: `Distribución discreta con ${xs.length} valores: 𝔼 = Σ x·p = ${f(D.mean)}, σ² = ${f(D.var)}.` };
+        const nP = normP(ps, 'la distribución discreta');
+        const D = T.discreteTable(xs, nP.ps);
+        return { D, ex: `Distribución discreta con ${xs.length} valores: 𝔼 = Σ x·p = ${f(D.mean)}, σ² = ${f(D.var)}.${nP.note}` };
       }
     }
   };
@@ -119,10 +127,9 @@ const P = (function () {
       build: (V, p) => {
         const xs = V.list(p + 'tx'), ps = V.list(p + 'tp');
         if (xs.length !== ps.length) throw new Error(`Hay ${xs.length} valores de N y ${ps.length} probabilidades.`);
-        const s = ps.reduce((a, b) => a + b, 0);
-        if (Math.abs(s - 1) > 1e-6) throw new Error(`Las probabilidades de N suman ${f(s)} y deben sumar 1.`);
-        const D = T.freqTable(xs, ps);
-        return { D, ex: `N toma los valores ${xs.map((x, i) => `${f(x)} (prob. ${f(ps[i])})`).join(', ')}: 𝔼(N) = Σ n·IP(N = n) = ${f(D.mean)}, σ²(N) = ${f(D.var)}.`, xs, ps };
+        const nP = normP(ps, 'N');
+        const D = T.freqTable(xs, nP.ps);
+        return { D, ex: `N toma los valores ${xs.map((x, i) => `${f(x)} (prob. ${f(ps[i])})`).join(', ')}: 𝔼(N) = Σ n·IP(N = n) = ${f(D.mean)}, σ²(N) = ${f(D.var)}.${nP.note}`, xs, ps: nP.ps };
       }
     },
     binomial: { lab: 'Binomial (n; p)', modes: { p: { lab: 'n y p', f: [['n', 'n', '10', { pos: 1 }], ['p', 'p', '0,1', { prob: 1 }]], mk: x => { if (Math.round(x.n) !== x.n) throw new Error('n debe ser entero.'); return T.binomial(x.n, x.p); }, ex: (x, D) => `N ∼ Bin(n = ${f(x.n)}; p = ${f(x.p)}). Por (23): 𝔼(N) = np = ${f(D.mean)}, σ²(N) = np(1−p) = ${f(D.var)}.` } } }
@@ -329,5 +336,5 @@ const P = (function () {
     }
     return { ht, z, Eb, red };
   }
-  return { buhlmann, CF, CF_ALL, CF_POS, DF, FR, MEAS, famFields, buildFam, withShow, measFields, buildMeas, specOf, usesLvl, usesA, usesMu, std01Explain, genExplain, srcFields, buildSrc, slFormula, layerFormula, rn };
+  return { normP, buhlmann, CF, CF_ALL, CF_POS, DF, FR, MEAS, famFields, buildFam, withShow, measFields, buildMeas, specOf, usesLvl, usesA, usesMu, std01Explain, genExplain, srcFields, buildSrc, slFormula, layerFormula, rn };
 })();

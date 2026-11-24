@@ -43,6 +43,7 @@ const VIEWS = (function () {
     ['Junio 2025', '4c', 'Credibilidad de Bühlmann (mixtura exponencial–normal)', 3, 't3-mixtura', 'j25-4'],
     ['Enero 2025', '2a-b', 'Recargos con CVaR90 y con reaseguro por tramos', 8, 't8-recargos', 'e25-2'],
     ['Enero 2025', '2b', 'Reaseguro por tramos 0,2 / 0,6', 5, 't5-reaseguro', 'e25-2b'],
+    ['Enero 2025', '1', 'λ-cuantil: cuándo coincide con el VaR (suelto)', 4, 't4-lambda', 'e25-1'],
     ['Enero 2025', '2c', 'Expectil 𝔈₀,₃ de la N(0,1)', 4, 't4-medidas', 'e25-2c'],
     ['Enero 2025', '3a-b', 'Bonus-malus Gamma–Poisson y prima con CVaR90', 10, 't10-cred', 'e25-3a'], ['Enero 2025', '3c', 'Bühlmann con λ gamma', 10, 't10-cred', 'e25-3c'],
     ['Enero 2025', '3b', 'Primas a priori / a posteriori (Poisson + log-normal)', 3, 't3-agregado', 'e25-3b-pri'],
@@ -174,7 +175,7 @@ const VIEWS = (function () {
 
   /* ───────── Ejercicios prácticos del examen ─────────
      Revisadas las 16 convocatorias (2014–2026): los prácticos siempre agrupan los mismos temas. */
-  const P1T = ['t8-recargos', 't5-reaseguro', 't4-medidas', 't5-optimo', 't4-normal', 't4-param'];
+  const P1T = ['t8-recargos', 't5-reaseguro', 't4-medidas', 't5-optimo', 't4-normal', 't4-param', 't4-lambda'];
   const P3T = ['t10-cred', 't3-tipos', 't3-mixtura'];
   const pracOfRow = r => P1T.includes(r[4]) ? 'p1' : (P3T.includes(r[4]) || r[3] === 10) ? 'p3' : (r[3] === 11 || r[3] === 12) ? 'p4' : 'p2';
   const PRAC = [
@@ -192,7 +193,8 @@ const VIEWS = (function () {
         ['ρ(0,1) de la N(0,1) (SW, SDPT, expectil, ∫2μ·CVaR dμ), CVaR(μ) y sensibilidad, PELVE — 2014, 2016, Jun 2024, Ene 2025, 2026', 't4-medidas', 'Siniestralidad, medidas (una por fila) y, si procede, el deducible U.'],
         ['«Establezca un procedimiento para estimar el k óptimo» del stop-loss — 2022, Jun 2025', 't5-optimo', 'Tabla de pólizas, medida, recargos de la reaseguradora.'],
         ['«Determine μ para que el recargo máximo sea del 10 %» — Jun 2026', 't4-param', 'm, s, la medida y el objetivo.'],
-        ['«Bajo Π = … la prima es …: determine m y s» — Jun 2025', 't4-normal', 'Los dos principios de prima y sus valores.']
+        ['«Bajo Π = … la prima es …: determine m y s» — Jun 2025', 't4-normal', 'Los dos principios de prima y sus valores.'],
+        ['Suelto · λ-cuantil: «determine condiciones de F para que VaR = Q<sub>λ</sub>» — Ene 2025', 't4-lambda', 'Los tramos de λ (desde x y valor) y los niveles del VaR; opcionalmente una F concreta.']
       ]
     },
     {

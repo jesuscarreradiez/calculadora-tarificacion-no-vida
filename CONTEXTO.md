@@ -112,3 +112,7 @@ engine.js (numérica, distribuciones, medidas, FFT/Panjer, MC) · ui.js (formula
 - Dentro de cada caso, la guía «¿Qué herramienta uso…?» va ordenada de más a menos frecuente con los años en que cayó; el Caso 3 enumera las cuatro plantillas (Gamma–Poisson, beta sobre IP(N = 0), grupos con Bayes, Bühlmann) y la variante con principio distinto del PPVE. Se corrigió la guía y la chuleta del Caso 3, que no se habían actualizado con el tema 10.
 - Pendiente de decidir: «Caso 5 · Sueltos» (tramos con y normal, m y s con dos primas, λ-cuantil).
 - Las pruebas usan rutas relativas al repositorio (test/*.js) y un directorio temporal (test/varied.py).
+- Sin «Caso 5»: el λ-cuantil (Enero 2025 Ej. 1) es la herramienta t4-lambda dentro del Caso 1, como «suelto» en su guía. Definición usada (la de la solución oficial): con F continua y estrictamente creciente, F(Q_λ(y)) = λ(Q_λ(y)) y F(VaR₁₋μ(y)) = μ; la app da las condiciones sobre F en los saltos de λ y, opcionalmente, Q_λ con una F concreta.
+- Copiar respuesta: pone en el portapapeles HTML (Word/Docs conservan sub/superíndices) y texto plano con ^ para los superíndices, espacio tras el título de cada apartado y línea en blanco entre apartados (UI.answerPlain; test/copytxt.js lo muestra).
+- Respuestas revisadas como corrector: sin referencias a tablas de la app («el cuadro de arriba»), beta con u, v, w y h explícitos, Λ en la simulación de mixturas.
+- Probabilidades que suman 1 sólo por redondeo (|Σ − 1| ≤ 0,011): se normalizan y se avisa; si no, error con la pista de escribir fracciones (P.normP).
