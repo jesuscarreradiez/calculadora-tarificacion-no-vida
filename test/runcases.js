@@ -7,7 +7,7 @@ const fs = require('fs');
   const b = await chromium.launch();
   const p = await b.newPage();
   const errs = []; p.on('pageerror', e => errs.push(e.message));
-  await p.goto('file:///home/user/tnv/dist/Calculadora_Tarificacion_No_Vida.html');
+  await p.goto('file://' + require('path').resolve(__dirname, '../dist/Calculadora_Tarificacion_No_Vida.html'));
   const out = [];
   for (const c of cases) {
     const r = await p.evaluate(async ([tool, values]) => {

@@ -106,3 +106,9 @@ engine.js (numérica, distribuciones, medidas, FFT/Panjer, MC) · ui.js (formula
 - E18-2 en Recargos usa el SW₂ simulado del profesor (ρ(0,1) = 2,444668919).
 - test/varied.py (semillas 7, 11, 23): 430 enunciados inventados (otras distribuciones de N y S, tablas de 2–6 valores, franquicias, límites, franquicia anual, mixturas de severidad, carteras de 1–5 tipos, 7 medidas, 5 tipos de tratado, retenido, tramos, reaseguradora con otra medida, reservas, inversión con 1–3 activos, Gamma–Poisson, betas, beta para N ≤ k, Bühlmann por momentos, grupos de 2–4 tipos con 2–5 valores, mixturas continuas, clásica). 2.625 comprobaciones contra referencias independientes (fórmulas, integración numérica, Monte Carlo propio de 2·10⁶): 0 errores de la app; las 2 discrepancias de la semilla 23 eran ruido de la simulación de referencia (verificadas con el cálculo exacto).
 - Uso: python3 test/varied.py <semilla> (ejecuta test/runcases.js sobre dist/).
+
+## Casos prácticos 1–4 (nov. 2026)
+- La barra lateral y el inicio se ordenan por «Caso práctico 1–4» (orden mental del usuario, sin contar el test): 1 Cartera con reaseguro (suele ser la 1ª práctica, 15/16), 2 Frecuencia × severidad (2ª, 16/16), 3 Bonus-malus y credibilidad (3ª, 16/16), 4 Regresión (última, desde 2023). Cada caso indica en qué Ej. del enunciado suele caer.
+- Dentro de cada caso, la guía «¿Qué herramienta uso…?» va ordenada de más a menos frecuente con los años en que cayó; el Caso 3 enumera las cuatro plantillas (Gamma–Poisson, beta sobre IP(N = 0), grupos con Bayes, Bühlmann) y la variante con principio distinto del PPVE. Se corrigió la guía y la chuleta del Caso 3, que no se habían actualizado con el tema 10.
+- Pendiente de decidir: «Caso 5 · Sueltos» (tramos con y normal, m y s con dos primas, λ-cuantil).
+- Las pruebas usan rutas relativas al repositorio (test/*.js) y un directorio temporal (test/varied.py).

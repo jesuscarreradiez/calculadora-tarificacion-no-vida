@@ -402,7 +402,9 @@ for i in range(3):
         {'I2': (Ve / Ev2, 'exact'), 'Eb': (mL * (1 - 10 / (10 + Ev2 / Ve)), 'exact'), 'hTarget': (Ev2 / Ve * tg / (1 - tg), 'exact')})
 
 # ───────────────────────── Ejecutar y comparar ─────────────────────────
-inp, outp = '/tmp/claude-0/-home-user/9451f465-8866-565a-82e6-9cb62b052902/scratchpad/vcases.json', '/tmp/claude-0/-home-user/9451f465-8866-565a-82e6-9cb62b052902/scratchpad/vout.json'
+import tempfile
+_td = tempfile.mkdtemp(prefix='tnv_')
+inp, outp = os.path.join(_td, 'vcases.json'), os.path.join(_td, 'vout.json')
 json.dump(cases, open(inp, 'w'))
 env = dict(os.environ, NODE_PATH=subprocess.check_output(['npm', 'root', '-g']).decode().strip())
 subprocess.run(['node', os.path.join(HERE, 'runcases.js'), inp, outp], check=True, env=env, timeout=3000)

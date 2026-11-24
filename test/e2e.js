@@ -5,7 +5,7 @@ const { chromium } = require('playwright');
   const errs = [];
   p.on('pageerror', e => errs.push('PAGEERROR ' + e.message));
   p.on('console', m => { if (m.type() === 'error') errs.push('CONSOLE ' + m.text()); });
-  await p.goto('file:///home/user/tnv/dist/Calculadora_Tarificacion_No_Vida.html');
+  await p.goto('file://' + require('path').resolve(__dirname, '../dist/Calculadora_Tarificacion_No_Vida.html'));
   await p.waitForTimeout(300);
   const tools = await p.evaluate(() => UI.TOOLS.map(t => ({ id: t.id, tema: t.tema, ex: (t.examples || []).map(e => e.id) })));
   for (const t of tools) {

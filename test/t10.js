@@ -5,7 +5,7 @@ const close = (a, b, tol = 1e-7) => Math.abs(a - b) <= tol * Math.max(1, Math.ab
   const b = await chromium.launch();
   const p = await b.newPage();
   const errs = []; p.on('pageerror', e => errs.push(e.message));
-  await p.goto('file:///home/user/tnv/dist/Calculadora_Tarificacion_No_Vida.html');
+  await p.goto('file://' + require('path').resolve(__dirname, '../dist/Calculadora_Tarificacion_No_Vida.html'));
   const run = async (tool, values) => p.evaluate(async ([tool, values]) => {
     const t = UI.toolById(tool), id = 'tmp' + Math.random().toString(36).slice(2);
     t.examples.push({ id, label: id, values });

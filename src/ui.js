@@ -378,10 +378,10 @@ const UI = (function () {
       grp.append(list);
       return grp;
     };
-    for (const parte of [1, 2]) {
-      const ps = PRACTICOS.filter(p => p.parte === parte);
+    for (const parte of [1]) {
+      const ps = PRACTICOS;
       if (!ps.length) continue;
-      NAV.append(h('div', { class: 'nv-sec' }, parte === 1 ? 'Parte 1 · temas 1–8' : 'Parte 2 · temas 10–13'));
+      NAV.append(h('div', { class: 'nv-sec' }, 'Casos prácticos del examen'));
       for (const p of ps) NAV.append(grpOf(p.id, p.n, p.nav + (p.soon ? ' <small>· en parte próximamente</small>' : ''), p.color, p.tools.map(toolById), !p.tools.length));
     }
     const det = h('details', { class: 'nv-temas' }, h('summary', { class: 'nv-sec' }, 'Consultar por tema'));
@@ -412,9 +412,9 @@ const UI = (function () {
     ROOT.innerHTML = '';
     const tools = ctxTools(n);
     if (P_ && !tools.length) {   // práctico todavía sin herramientas
-      setCrumb([`Parte ${P_.parte} · Práctico ${P_.n}`, P_.short]);
+      setCrumb([`Caso práctico ${P_.n}`, P_.short]);
       const wrap = h('div', { style: { '--tc': P_.color } });
-      wrap.append(h('div', { class: 'page-h' }, h('div', { class: 'page-k' }, h('span', { class: 'chip-n' }, `Práctico ${P_.n}`), `Parte ${P_.parte} del temario`), h('h2', null, P_.title)));
+      wrap.append(h('div', { class: 'page-h' }, h('div', { class: 'page-k' }, h('span', { class: 'chip-n' }, `Caso ${P_.n}`), P_.whenShort), h('h2', null, P_.title)));
       if (P_.top) wrap.append(P_.top(h, goTool, null, id => go(n, id)));
       if (P_.bottom) wrap.append(P_.bottom(h, goTool));
       ROOT.append(wrap); curTool = null; return;
@@ -422,11 +422,11 @@ const UI = (function () {
     const cur = tools.find(t => t.id === state.toolByTema[n]) || tools[0];
     state.toolByTema[n] = cur.id;
     const tm = temaOf(cur.tema);
-    setCrumb(P_ ? [`Parte ${P_.parte} · Práctico ${P_.n}`, P_.short, cur.title.replace(/<[^>]+>/g, '')] : [`Tema ${n} · ${tm.title}`, cur.title.replace(/<[^>]+>/g, '')]);
+    setCrumb(P_ ? [`Caso práctico ${P_.n}`, P_.short, cur.title.replace(/<[^>]+>/g, '')] : [`Tema ${n} · ${tm.title}`, cur.title.replace(/<[^>]+>/g, '')]);
     const wrap = h('div', { style: { '--tc': P_ ? P_.color : tm.color } });
     if (P_) {
       wrap.append(h('div', { class: 'page-h' },
-        h('div', { class: 'page-k' }, h('span', { class: 'chip-n' }, `Práctico ${P_.n}`), `Parte ${P_.parte} · ${P_.title}`),
+        h('div', { class: 'page-k' }, h('span', { class: 'chip-n' }, `Caso ${P_.n}`), `${P_.title} · ${P_.whenShort}`),
         h('h2', { html: cur.title }), h('p', { html: cur.short })));
       if (P_.top) wrap.append(P_.top(h, goTool, cur.id, id => go(n, id)));
     } else wrap.append(h('div', { class: 'page-h' },

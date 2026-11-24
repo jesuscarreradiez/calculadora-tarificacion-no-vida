@@ -1,8 +1,8 @@
 const { chromium } = require('playwright');
-const out = '/home/user/tnv/capturas/';
+const out = './capturas/';
 (async () => { const b = await chromium.launch();
  const p = await b.newPage({ viewport: { width: 1440, height: 900 } });
- await p.goto('file:///home/user/tnv/dist/Calculadora_Tarificacion_No_Vida.html'); await p.waitForTimeout(300);
+ await p.goto('file://' + require('path').resolve(__dirname, '../dist/Calculadora_Tarificacion_No_Vida.html')); await p.waitForTimeout(300);
  await p.evaluate(() => UI.go(0)); await p.waitForTimeout(200); await p.screenshot({ path: out + '1_inicio.png' });
  await p.evaluate(() => UI.go('ex')); await p.waitForTimeout(200); await p.screenshot({ path: out + '2_examenes.png' });
  await p.evaluate(() => UI.go(3, 't3-agregado', 'e14-3c'));

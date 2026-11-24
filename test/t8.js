@@ -1,7 +1,7 @@
 const { chromium } = require('playwright');
 (async () => { const b = await chromium.launch(); const p = await b.newPage({ viewport: { width: 1400, height: 1000 } });
  const errs=[]; p.on('pageerror', e => errs.push(e.message));
- await p.goto('file:///home/user/tnv/dist/Calculadora_Tarificacion_No_Vida.html'); await p.waitForTimeout(300);
+ await p.goto('file://' + require('path').resolve(__dirname, '../dist/Calculadora_Tarificacion_No_Vida.html')); await p.waitForTimeout(300);
  for (const prof of [false, true]) {
   await p.evaluate(v => { const c=document.getElementById('profPi'); c.checked=v; c.dispatchEvent(new Event('change')); }, prof);
   console.log('\n######## 2π≈6,28 =', prof);
