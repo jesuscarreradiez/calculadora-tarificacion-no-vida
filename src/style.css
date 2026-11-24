@@ -5,7 +5,7 @@
   --ok:#1f6a35; --ok-bg:#ecf6ef; --ok-b:#b5dcc1;
   --warn:#8a4a05; --warn-bg:#fdf4e7; --warn-b:#efcb91;
   --err:#8a1f1f; --err-bg:#fdf0f0; --err-b:#efbcbc;
-  --t1:#1b3a5e; --t2:#1f6a35; --t3:#8a4a05; --t4:#5b2a7a; --t5:#13616a; --t8:#8a2846; --t10:#5a5a12;
+  --t1:#1b3a5e; --t2:#1f6a35; --t3:#8a4a05; --t4:#5b2a7a; --t5:#13616a; --t8:#8a2846; --t10:#5a5a12; --t11:#2c4f8a;
   --mono:ui-monospace,"Cascadia Mono","Consolas","Courier New",monospace;
   --serif:Georgia,"Cambria","Times New Roman",serif;
   --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
@@ -19,7 +19,7 @@
     --ok:#7fd29a; --ok-bg:#16291e; --ok-b:#2c5a3b;
     --warn:#f0b768; --warn-bg:#2d2414; --warn-b:#5f4a22;
     --err:#f19a9a; --err-bg:#311a1a; --err-b:#683030;
-    --t1:#8db7e6; --t2:#7fd29a; --t3:#f0b768; --t4:#c9a2e8; --t5:#76c9d2; --t8:#f09ab0; --t10:#d6d27a;
+    --t1:#8db7e6; --t2:#7fd29a; --t3:#f0b768; --t4:#c9a2e8; --t5:#76c9d2; --t8:#f09ab0; --t10:#d6d27a; --t11:#9ab8f0;
     --shadow:none;
   }
 }
@@ -30,7 +30,7 @@
   --ok:#7fd29a; --ok-bg:#16291e; --ok-b:#2c5a3b;
   --warn:#f0b768; --warn-bg:#2d2414; --warn-b:#5f4a22;
   --err:#f19a9a; --err-bg:#311a1a; --err-b:#683030;
-  --t1:#8db7e6; --t2:#7fd29a; --t3:#f0b768; --t4:#c9a2e8; --t5:#76c9d2; --t8:#f09ab0; --t10:#d6d27a;
+  --t1:#8db7e6; --t2:#7fd29a; --t3:#f0b768; --t4:#c9a2e8; --t5:#76c9d2; --t8:#f09ab0; --t10:#d6d27a; --t11:#9ab8f0;
   --shadow:none;
 }
 *{box-sizing:border-box;margin:0;padding:0}

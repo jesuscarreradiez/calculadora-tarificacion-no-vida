@@ -74,6 +74,13 @@ const UI = (function () {
     clas: 'Credibilidad clásica: z = (m/s)·θ√h/Φ<sup>−1</sup>((1 + β)/2) (si sale > 1, z = 1); prima del subgrupo z·X̄ + (1 − z)m; variación z(X̄ − m)/m (ec. 98–100)',
     redpp: 'Bonus-malus con el PPVE: % de reducción = (𝔼 a priori − 𝔼 a posteriori)/𝔼 a priori (negativo = recargo)',
     lam42: 'λ-cuantil: Q<sub>λ</sub>(y) = inf{x : F(x) > λ(x)}; con F continua y estrictamente creciente, F(Q<sub>λ</sub>(y)) = λ(Q<sub>λ</sub>(y)), mientras que F(VaR<sub>1−μ</sub>(y)) = μ (§4.2.9)',
+    ols: 'Regresión lineal (mínimos cuadrados ponderados por las frecuencias): β̂ = (XᵗWX)<sup>−1</sup>XᵗWy, R² = 1 − Σwᵢ(yᵢ − ŷᵢ)²/Σwᵢ(yᵢ − ȳ)²',
+    sdreg: 'σ²(y) = 𝔼(y²) − 𝔼(y)²: se regresa y² frente a los factores y σ(y) ≈ √(𝔼̂(y²) − 𝔼̂(y)²)',
+    mlbin: 'Máxima verosimilitud binomial: max ℓ(β) = Σ[kᵢ log pᵢ + (nᵢ − kᵢ) log(1 − pᵢ)], con pᵢ = 1/(1 + e<sup>−(β₀ + βXᵢ)</sup>) (logit) o pᵢ = Φ(β₀ + βXᵢ) (probit)',
+    mlpois: 'Máxima verosimilitud de Poisson con vínculo logarítmico: max ℓ(β) = Σ[Nᵢ log λᵢ − nᵢλᵢ], log λᵢ = β₀ + βXᵢ',
+    qreg: 'Regresión de cuantiles: VaR<sub>1−μ</sub>(−y) ≈ β₀ + βX con min Σwᵢρ<sub>τ</sub>(yᵢ − β₀ − βXᵢ), ρ<sub>τ</sub>(r) = r(τ − 𝟙(r < 0)), τ = 1 − μ',
+    cvtr: 'CVaR por tramos: CVaR<sub>1−μ</sub>(−y) = (1/μ)∫<sub>1−μ</sub><sup>1</sup>VaR<sub>τ</sub>(−y)dτ ⇒ β̃ⱼ = (1/μ)Σₖ βⱼ(τₖ)·Δτₖ',
+    expreg: 'Regresión de expectiles: min Σwᵢ|τ − 𝟙(rᵢ < 0)|rᵢ², τ = 1 − μ (mínimos cuadrados asimétricos)',
     mc72: 'Monte Carlo (§7.2): simular N; si N > 0 simular S₁…S<sub>N</sub> y sumar; repetir M veces; estimar 𝔼, σ, VaR (percentil) y CVaR (media de la cola)'
   };
 
@@ -89,6 +96,8 @@ const UI = (function () {
   // Abre una herramienta dentro de su ejercicio práctico (o de su tema si no pertenece a ninguno)
   const goTool = (id, exId) => { const p = practicoOfTool(id); go(p ? p.id : toolById(id).tema, id, exId); };
   const allFields = t => t.groups.flatMap(g => g.fields);
+  // Abre otra herramienta con unos datos ya cargados (p. ej. la cartera obtenida por regresión → Recargos)
+  const openWith = (id, vals) => { const t = toolById(id); state.vals[id] = Object.assign(defaults(t), JSON.parse(JSON.stringify(vals))); save(t); delete state.lastRes[id]; delete state.lastEx[id]; goTool(id); setTimeout(solveCurrent, 0); };
 
   /* ───────── Valores ───────── */
   function defaults(t) {
@@ -167,6 +176,7 @@ const UI = (function () {
     r.warn = html => { r.blocks.push({ k: 'warn', html }); return r; };
     r.html = html => { r.blocks.push({ k: 'html', html }); return r; };
     r.key = (k, v) => { r.keys[k] = v; return r; };
+    r.action = (label, toolId, vals, html) => { r.blocks.push({ k: 'act', label, toolId, vals, html }); return r; };   // botón «llevar a otra herramienta»
     return r;
   }
   const eq = s => `<div class="eq">${s}</div>`;
@@ -328,6 +338,7 @@ const UI = (function () {
     if (b.k === 'note') return h('div', { class: 'note', html: b.html });
     if (b.k === 'warn') return h('div', { class: 'warn', html: '⚠ ' + b.html });
     if (b.k === 'html') return h('div', { html: b.html });
+    if (b.k === 'act') return h('div', { class: 'note' }, b.html ? h('span', { html: b.html + ' ' }) : null, h('button', { class: 'btn2', type: 'button', onclick: () => openWith(b.toolId, b.vals) }, b.label));
     if (b.k === 'table') {
       const d = h('div');
       if (b.title) d.append(h('h3', { html: b.title }));
@@ -551,5 +562,5 @@ const UI = (function () {
     const t0 = nav ? nav.tema : 0;
     go(t0 === 'ex' || practicoOf(t0) ? t0 : (t0 && temaOf(t0) && !temaOf(t0).off ? t0 : 0));
   }
-  return { answerPlain, tema, tool, practico, start, go, goTool, h, eq, v, result, TOOLS, TEMAS, PRACTICOS, toolById, practicoOfTool };
+  return { answerPlain, openWith, tema, tool, practico, start, go, goTool, h, eq, v, result, TOOLS, TEMAS, PRACTICOS, toolById, practicoOfTool };
 })();

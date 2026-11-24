@@ -116,3 +116,12 @@ engine.js (numérica, distribuciones, medidas, FFT/Panjer, MC) · ui.js (formula
 - Copiar respuesta: pone en el portapapeles HTML (Word/Docs conservan sub/superíndices) y texto plano con ^ para los superíndices, espacio tras el título de cada apartado y línea en blanco entre apartados (UI.answerPlain; test/copytxt.js lo muestra).
 - Respuestas revisadas como corrector: sin referencias a tablas de la app («el cuadro de arriba»), beta con u, v, w y h explícitos, Λ en la simulación de mixturas.
 - Probabilidades que suman 1 sólo por redondeo (|Σ − 1| ≤ 0,011): se normalizan y se avisa; si no, error con la pista de escribir fracciones (P.normP).
+
+## Caso 4 · Regresión (src/t11.js, herramienta `t11-reg`)
+- Entra en el examen desde **Junio 2023** (J23 Ej. 4, E24 Ej. 5, E25 Ej. 4, E26 Ej. 3); no sale en junio de 2024, 2025 ni 2026. J23: falta el PDF.
+- MCO ponderado por frecuencias (= macro J: «Jensen Alfa», «Accuracy» = R²·100); logit/probit/log por MCO sobre la transformada (= «Betas LS» de N1–N3) y por MV exacta (Newton). Las «Betas ML» de las macros vienen de una búsqueda aleatoria: la MV exacta tiene log-verosimilitud mayor.
+- Cuantílica exacta (enumerando combinaciones de p filas; límite 30.000 combinaciones). Tramos: rejilla + bisección + corte analítico (pérdida lineal en τ). CVaR por tramos; niveles manuales para reproducir soluciones que usan cortes redondeados.
+- Expectiles por IRLS asimétrico (τ = 1 − μ); la macro K2 también es aproximada (su objetivo es mayor).
+- σ(y) por regresión de y²; varios clientes con nº de pólizas → cuadro y botón `R.action` que abre `t8-recargos` con la cartera (UI.openWith).
+- Erratas: E25 (β₀ 88,73 en vez de 188,73; β̃₀ 5.530,6 incoherente con sus tramos; tramos exactos: 5 cortes, CVaR ≈ 1.039,18 + 1,6228H); E24 escribe VaR95 por VaR90; E26 redondea cortes a 0,51/0,64; ejercicio de clase: 6ª fila F₁ = 2 (no −2), corte en 99,418 % (la solución usa 99,5 %).
+- Test: `NODE_PATH=$(npm root -g) node test/t11.js`.

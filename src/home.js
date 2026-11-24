@@ -32,7 +32,7 @@ const VIEWS = (function () {
     ['Enero 2026', '2a-b', 'Bonus-malus Gamma–Poisson y prima con CVaR95', 10, 't10-cred', 'e26-2a'],
     ['Enero 2026', '2b', 'Prima a priori / a posteriori con CVaR (compuesta)', 3, 't3-agregado', 'e26-2b-pri'],
     ['Enero 2026', '2c', 'Bühlmann con N|λ binomial negativa (índice de mixtura)', 3, 't3-mixtura', 'e26-2c'],
-    ['Enero 2026', '3', 'Regresión logística y cuantílica', 12, null, null],
+    ['Enero 2026', '3', 'P(A) de aceptar una campaña: logit por MCO y MV, cuantílica, F de −P(A), caso peor', 11, 't11-reg', 'e26-3'],
     ['Junio 2025', '1', 'Normal: m y s a partir de dos primas; prima con 𝔈₀,₁₅', 4, 't4-normal', 'j25-1'],
     ['Junio 2025', '2a', 'Recargos de la cartera y primas por póliza con SW₁', 8, 't8-recargos', 'j25-2a'],
     ['Junio 2025', '2b', 'Stop-loss (y − 500.000)⁺ con SW₁', 5, 't5-reaseguro', 'j25-2b'],
@@ -47,7 +47,7 @@ const VIEWS = (function () {
     ['Enero 2025', '2c', 'Expectil 𝔈₀,₃ de la N(0,1)', 4, 't4-medidas', 'e25-2c'],
     ['Enero 2025', '3a-b', 'Bonus-malus Gamma–Poisson y prima con CVaR90', 10, 't10-cred', 'e25-3a'], ['Enero 2025', '3c', 'Bühlmann con λ gamma', 10, 't10-cred', 'e25-3c'],
     ['Enero 2025', '3b', 'Primas a priori / a posteriori (Poisson + log-normal)', 3, 't3-agregado', 'e25-3b-pri'],
-    ['Enero 2025', '4', 'Regresión lineal y cuantílica', 12, null, null],
+    ['Enero 2025', '4', 'Horas de conducción: lineal, cuantílica 95 %, CVaR por tramos y prima', 11, 't11-reg', 'e25-4'],
     ['Junio 2024', '1a, 2b', 'ρ = 2∫μ·CVaR dμ', 4, 't4-medidas', 'j24-1'],
     ['Junio 2024', '2a', 'Recargos con SW₁ (tabla 2.000/5.000/3.000)', 8, 't8-recargos', 'j24-2'],
     ['Junio 2024', '2c', 'Reaseguro 0,9y − 0,6(y − 2.450.000)⁺', 5, 't5-reaseguro', 'j24-2c'],
@@ -58,11 +58,11 @@ const VIEWS = (function () {
     ['Enero 2024', '2c', 'SDPT₁ de un stop-loss sobre dos carteras', 5, 't5-reaseguro', 'e24-2c'],
     ['Enero 2024', '3', 'BN + suma de exponenciales, franquicia 100, 1.800 pólizas', 3, 't3-agregado', 'e24-3'],
     ['Enero 2024', '4', 'Credibilidad de Bühlmann por momentos', 10, 't10-cred', 'e24-4'],
-    ['Enero 2024', '5', 'Regresión lineal y cuantílica', 12, null, null],
+    ['Enero 2024', '5', 'log(y) con dos factores: lineal, cuantílica 90 % y prima', 11, 't11-reg', 'e24-5'],
     ['Junio 2023', '2a-b', 'BN + log-normal, CVaR94, cartera de 10.000 pólizas', 3, 't3-agregado', 'j23-2'],
     ['Junio 2023', '2c', 'Reaseguro por capas (y − 950.000)⁺ − (y − 1.150.000)⁺', 5, 't5-reaseguro', 'j23-2c'],
     ['Junio 2023', '3', 'Dos tipos de asegurados, Bayes y CVaR86', 3, 't3-tipos', 'j23-3'],
-    ['Junio 2023', '4', 'Regresión logística', 11, null, null],
+    ['Junio 2023', '4', 'Regresión logística por MV a partir de casos favorables (falta el PDF; se resuelve con «Casos favorables» + MV)', 11, 't11-reg', null],
     ['Enero 2023', '2a', 'Recargos con SW₁', 8, 't8-recargos', 'e23-2'],
     ['Enero 2023', '2b-c', 'Compara cuota-parte, stop-loss y mixto', 5, 't5-reaseguro', 'e23-2b'],
     ['Enero 2023', '3', 'BN + exponencial: franquicia, límite, k mínimo', 3, 't3-agregado', 'e23-3i'],
@@ -231,10 +231,19 @@ const VIEWS = (function () {
       ]
     },
     {
-      id: 'p4', whenShort: 'Última práctica · desde 2023 (4 de 16)', n: 4, parte: 2, color: 'var(--faint)', nav: 'Caso 4 · Regresión', short: 'Regresión',
-      title: 'Regresión lineal, logística y cuantílica', temas: [11, 12, 13],
-      when: 'Sale desde 2023: Junio 2023 Ej. 4, Enero 2024 Ej. 5, Enero 2025 Ej. 4 y Enero 2026 Ej. 3.',
-      intro: 'Temas 11–13. Próximamente.', tools: [], steps: []
+      id: 'p4', whenShort: 'Última práctica · desde Junio 2023 (4 de 16)', n: 4, parte: 2, color: 'var(--t11)', nav: 'Caso 4 · Regresión', short: 'Regresión',
+      title: 'Regresión lineal, logística y cuantílica', temas: [11],
+      when: 'Entra en el examen a partir de <b>Junio 2023</b> (de 2014 a Enero 2023 no hay regresión): Junio 2023 Ej. 4, Enero 2024 Ej. 5, Enero 2025 Ej. 4 y Enero 2026 Ej. 3. En las convocatorias de junio de 2024, 2025 y 2026 no sale.',
+      intro: 'Siempre es un <b>cuadro de datos agrupados</b> (frecuencia, factores y respuesta) y piden una o varias aproximaciones; después, evaluarlas para un cliente y usarlas en una prima o en una decisión. Todo se hace en una sola herramienta: metes el cuadro una vez y marcas los modelos que piden los apartados.',
+      glos: [['«Se dispone de los datos (frecuencia, X₁, X₂, y)»', 'Una fila por línea del cuadro: frecuencia, X₁, X₂ (X₃ si hay) e y. Deja vacías las columnas de factores que no existan.'], ['«Estime 𝔼(y) ≈ β₀ + β₁X₁ + …» · «por mínimos cuadrados» · «Jensen Alfa / Accuracy»', 'Marca «Regresión lineal». β₀ es el «Jensen Alfa» de la macro y R² × 100 su «Accuracy (%)».'], ['«Explique log(y)» · «utilice el logaritmo como vínculo»', '«La última columna es» → log(y). La calculadora vuelve a y con la exponencial.'], ['«Aproxime σ(y)» · «regrese y²»', 'Marca «σ(y) por regresión de y²»: σ = √(𝔼(y²) − 𝔼(y)²).'], ['«De los n clientes, k aceptaron / tuvieron el suceso A»', '«La última columna es» → casos favorables (k); la frecuencia es n. Regresión lineal = MCO sobre logit(k/n).'], ['«Regresión logística / probit por máxima verosimilitud»', 'Marca «Máxima verosimilitud» y la función de enlace. Las macros del profesor (N1, N3) buscan al azar: su resultado es aproximado.'], ['«Número total de siniestros del grupo» · «regresión logarítmica»', '«La última columna es» → recuento: se explica log(media) y la MV es de Poisson (macro N2).'], ['«VaR₉₅(−y) ≈ β̃₀ + β̃₁X₁ + …» · «regresión de cuantiles»', 'Marca «Regresión de cuantiles» y escribe el nivel (varios con «;»).'], ['«CVaR₉₅(−y)» · «repitiendo la regresión de cuantiles para niveles mayores»', 'Marca «CVaR por tramos». Si la solución usa unos cortes concretos (p. ej. 99,5 %), escríbelos en «Niveles de los tramos».'], ['«Expectil 𝔈₀,₂(−y)»', 'Marca «Regresión de expectiles» con μ = 0,2.'], ['«Para un conductor con H = 2.000» · «cliente con X₁ = 55, X₂ = 40»', 'Grupo «Clientes / pólizas a evaluar»: una fila con los valores de los factores.'], ['«Cartera con 1.000 pólizas de (1, −10, 30), 2.000 de …: complete 𝔼, σ, CVaR»', 'Una fila por grupo con su nº de pólizas. Sale el cuadro y un botón que lo lleva a «Recargos» (Caso 1).'], ['«Distribución de −P(A) a partir de las rectas cuantílicas» · «𝔼(P(A))»', 'Marca «Función de distribución en ese punto» (y «de −y» si piden −P(A)).'], ['«Elija la estimación más prudente / worst case»', 'Marca «Criterio del caso peor» y si lo peor es el valor más bajo o el más alto.'], ['«Π(y) = 1,04𝔼(y) + 0,02CVaR₉₅(−y)»', 'Grupo «Prima»: a = 1,04, b = 0,02 y ρ = CVaR (o VaR).']],
+      tools: ['t11-reg'],
+      steps: [
+        ['𝔼(y) ≈ β₀ + βX por mínimos cuadrados (con o sin log(y)), su precisión R² — Ene 2024, Ene 2025, Ene 2026', 't11-reg', 'El cuadro (frecuencia, factores, y) y «Regresión lineal».'],
+        ['VaR(−y) por regresión de cuantiles y la prima con ese VaR — Ene 2024, Ene 2025', 't11-reg', 'Marca «Regresión de cuantiles» con el nivel; cliente y prima en los grupos opcionales.'],
+        ['CVaR(−y) integrando los tramos de la regresión cuantílica — Ene 2025 y ejercicio de clase', 't11-reg', 'Marca «CVaR por tramos» con el nivel del CVaR.'],
+        ['P(A) por regresión logística (MCO sobre logit y máxima verosimilitud), distribución de −P(A) y caso peor — Jun 2023, Ene 2026', 't11-reg', '«Casos favorables» como última columna, MCO y MV; cliente con «Función de distribución» y «Caso peor».'],
+        ['σ(y) por regresión de y² y cuadro (𝔼, σ, CVaR) de una cartera para hallar los recargos — ejercicio de clase', 't11-reg', 'Marca «σ(y) por y²» y pon una fila por grupo de pólizas; el botón lleva la cartera a «Recargos».']
+      ]
     }
   ];
   const guideOpen = {};
