@@ -765,7 +765,7 @@ const TNV = (function () {
     res.massTail = topMass;
     res.h = h; res.points = xs.length;
     res.dist = makeDisc(xs, ps);
-    res.Py0 = Math.max(0, g[0]);
+    { const z = N.pgfC(Math.max(0, FP(0)), 0); res.Py0 = isFinite(z[0]) ? Math.min(1, Math.max(0, z[0])) : Math.max(0, g[0]); }   // IP(y = 0) = P_N(IP(S = 0)), exacto (la celda 0 de la rejilla incluye [0, h/2))
     // Severidad continua sin límites: el cuantil se interpola dentro de cada celda de la rejilla
     if (S.kind === 'cont' && !isFinite(L) && !isFinite(F)) {
       const Dd = res.dist, cdfAt = k => 1 - (k + 1 < Dd.n ? Dd.sf(Dd.xs[k]) : 0);

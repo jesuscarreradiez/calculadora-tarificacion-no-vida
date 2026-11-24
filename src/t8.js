@@ -60,7 +60,9 @@
           { id: 'R0', type: 'num', label: 'Reservas iniciales R₀', def: '0' },
           { id: 'r01o', type: 'num', label: 'ρ(0,1) a usar (opcional)', def: '', ph: 'exacto', help: 'Si el examen da o simula ρ(0,1) (p. ej. SW₁ = 1,603621301), escríbelo para reproducir su solución' },
           { id: 'wE', type: 'num', label: 'Reparto mixto: peso del coste esperado (opcional)', def: '', ph: 'p. ej. 0,75', help: 'Πᵢ = w·Π·𝔼(yᵢ)/𝔼(y) + (1 − w)·Π·ρ(−yᵢ)/Σρ(−yᵢ)' },
-          { id: 'k1', type: 'num', label: 'k₁ fijado (opcional)', def: '', ph: 'p. ej. 10 %', help: 'Calcula el k₂ que le corresponde' }
+          { id: 'k1', type: 'num', label: 'k₁ fijado (opcional)', def: '', ph: 'p. ej. 10 %', help: 'Calcula el k₂ que le corresponde' },
+          { id: 'k2', type: 'num', label: 'o bien k₂ fijado (opcional)', def: '', ph: 'p. ej. 0,005', help: 'Calcula el k₁ que le corresponde' },
+          { id: 'k2f', type: 'num', label: 'o bien k₂ = fracción de su máximo', def: '', ph: 'p. ej. 0,5 (la mitad)', help: '«k₂ igual a la mitad de su valor máximo posible» ⇒ 0,5' }
         ]
       },
       {
@@ -118,8 +120,14 @@
       R.uses(rows ? 'tcl61' : null, 'norm44', 'prima71', 'k73');
       R.ans('Prima y recargos de la cartera.', `${rows ? `La siniestralidad de la cartera es normal de media ${f(m)} y desviación ${f(s)}.` : ''} Como ${rn(sp)} = ${f(m)} + ${f(r01)} × ${f(s)} = ${vv(rho)}, la prima de la cartera es Π = ${vv(P0)} y la relación entre recargos es` + eq(`${relTxt(0)}`) +
         `Por tanto, los recargos extremos son (k₁; k₂) = (${vv(e0.k1)}; 0) y (0; ${vv(e0.k2)}). Ambos conducen a la misma prima: ${f(m)} × (1 + ${f(e0.k1)}) = ${f(m)} + ${f(e0.k2)} × ${f(rho)} = ${f(P0)}.`);
-      const k1g = V.nOpt('k1');
-      if (k1g !== null) {
+      let k1g = V.nOpt('k1');
+      const k2in = V.nOpt('k2'), k2fr = V.nOpt('k2f');
+      if (k1g === null && (k2in !== null || k2fr !== null)) {   // k₂ dado (o fracción de su máximo) ⇒ k₁ de la relación lineal
+        const k2g = k2in !== null ? k2in : k2fr * e0.k2;
+        k1g = (1 - R0 / rho - k2g) / ratio - 1;
+        R.tile(`k₁ para k₂ = ${f(k2g)}`, k1g); R.key('k2fix', k2g).key('k1g', k1g);
+        R.ans(`Con k₂ = ${k2in !== null ? f(k2g) : f(k2fr) + ' × máximo'}.`, `${k2in !== null ? '' : `k₂ = ${f(k2fr)} × ${f(e0.k2)} = ${vv(k2g)}${c ? ` para la cartera, es decir, ${f(k2g)} × ${f(c)} = ${vv(k2g * c)} para cada póliza` : ''}. `}De k₂ = ${R0 ? `1 − R₀/ρ(−y) − ` : '1 − '}${f(ratio)}(1 + k₁) se despeja k₁ = (1${R0 ? ' − R₀/ρ(−y)' : ''} − k₂)/${f(ratio)} − 1 = ${vv(k1g)}.${c ? ` Las primas de cada póliza son Πᵢ = ${f(1 + k1g)}·𝔼(yᵢ) + ${f(k2g * c)}·ρ(−yᵢ) (cuadro de primas, columna k₁ = ${f(k1g, 6)}).` : ''}`);
+      } else if (k1g !== null) {
         const k2g = 1 - R0 / rho - ratio * (1 + k1g);
         R.tile(`k₂ para k₁ = ${pct(k1g)}`, k2g); R.key('k2g', k2g);
         R.step(`k₂ correspondiente a k₁ = ${f(k1g)}`, eq(`k₂ = ${relTxt(0).replace('k₂ = ', '')} con k₁ = ${f(k1g)} ⇒ k₂ = ${vv(k2g)}`) + (c ? eq(`Por póliza: k₂<sup>(p)</sup> = ${f(k2g)} × ${f(c)} = ${vv(k2g * c)}`) : ''));
@@ -253,6 +261,9 @@
       return R;
     },
     examples: [
+      { id: 'clase-reg-f', label: 'Ejercicio de clase (Regresiones) · f) · cartera 1.000/2.000/3.000 obtenida por regresión, CVaR 95 %, k₂ = mitad de su máximo', values: { src: 'tabla', cart: [{ n: '1000', E: '89,02927384', s: '44,43239478', r: '91,08072471' }, { n: '2000', E: '91,04420445', s: '29,58252562', r: '91,5141813' }, { n: '3000', E: '72,43175067', s: '34,45577213', r: '75,93643419' }], m_rho: 'CVaR', m_lvl: '95', R0: '0', r01o: '2,06323586', k2f: '0,5' },
+        expect: [{ k: 'm', l: 'Media de la cartera', v: 488412.9348 }, { k: 'prima', l: 'Prima (riesgo) de la cartera', v: 493982.1775, src: 'macro Ind' }, { k: 'k1max', l: 'k₁ máximo', v: 0.011402734 }, { k: 'k2max', l: 'k₂ máximo (cartera)', v: 0.011274177 }, { k: 'k2p', l: 'k₂ máximo (póliza)', v: 0.011095913 }, { k: 'c', l: 'Coeficiente reductor', v: 0.984188241 }, { k: 'k1g', l: 'k₁ con k₂ = máx/2', v: 0.005701367 }, { k: 'c4_1', l: 'Prima grupo 1', v: 90.04217426 }, { k: 'c4_2', l: 'Prima grupo 2', v: 92.07099753 }, { k: 'c4_3', l: 'Prima grupo 3', v: 73.26600266 }],
+        note: 'La solución usa ρ(0,1) = CVaR₉₅(N(0,1)) = 2,06323586; el exacto, φ(1,6449)/0,05, es 2,0627128. Este cuadro sale del Caso 4 (botón «Llevar la cartera a Recargos»).' },
       { id: 'nov10-g', label: 'Clase 10 nov. 2026 · g) · 5.000 pólizas (𝔼 = 2,275; σ = 4,2892), CVaR 95 %', values: { src: 'tabla', m_rho: 'CVaR', m_lvl: '95', R0: '0', r01o: '1,6448536269514715', k1: '', cart: [{ n: '5000', E: '2,275', s: '4,289157842747222', r: '15,819965325458567' }], reOn: false, invOn: false },
         expect: [{ k: 'rho', l: 'Prima de la cartera', v: 11873.86644, src: 'macro D' }, { k: 'k1max', l: 'Recargo de seguridad máx.', v: 0.0438563902 }, { k: 'k2max', l: 'Recargo por riesgo máx.', v: 0.0420138159 }, { k: 'c', l: 'Coeficiente de reducción', v: 0.1501124205 }], note: 'Ejercicio de clase del 10 nov. 2026 (no es de examen). La solución (macros D y F) usa ρ(0,1) = 1,6449, el del VaR<sub>95%</sub>, aunque pide CVaR<sub>95%</sub>; se pone ese valor en «ρ(0,1) a usar» para reproducirla. Para el CVaR correcto, borra ese campo.' },
       { id: 'nov10-h', label: 'Clase 10 nov. 2026 · h) · reaseguro 0,8Y − 0,4(Y − 11.000)⁺, reaseguradora 1,01𝔼 + 0,01·VaR₉₅', values: { src: 'tabla', m_rho: 'CVaR', m_lvl: '95', R0: '0', r01o: '1,6448536269514715', k1: '', cart: [{ n: '5000', E: '2,275', s: '4,289157842747222', r: '15,819965325458567' }], reOn: true, re: '0,8y − 0,4(y − 11.000)+', reT: 'c', k1r: '0,01', k2r: '0,01', mrOn: true, mr_rho: 'VaR', mr_lvl: '95', invOn: false },

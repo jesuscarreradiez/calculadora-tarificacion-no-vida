@@ -125,3 +125,5 @@ engine.js (numérica, distribuciones, medidas, FFT/Panjer, MC) · ui.js (formula
 - σ(y) por regresión de y²; varios clientes con nº de pólizas → cuadro y botón `R.action` que abre `t8-recargos` con la cartera (UI.openWith).
 - Erratas: E25 (β₀ 88,73 en vez de 188,73; β̃₀ 5.530,6 incoherente con sus tramos; tramos exactos: 5 cortes, CVaR ≈ 1.039,18 + 1,6228H); E24 escribe VaR95 por VaR90; E26 redondea cortes a 0,51/0,64; ejercicio de clase: 6ª fila F₁ = 2 (no −2), corte en 99,418 % (la solución usa 99,5 %).
 - Test: `NODE_PATH=$(npm root -g) node test/t11.js`.
+- Revisión completa del material de regresión (N1, N2, N3, J, K1, K2, Cuant, Reg, Book1, Ind, EjercicioRegresiones .tex/.pdf): todo reproducido. Ejemplo_1/Ejemplo_2.xlsm son simulaciones de frecuencia × severidad (ejemplos `mc-ej1` en t3-agregado y `mc-ej2` en t3-momentos).
+- Recargos: nuevos campos «k₂ fijado» y «k₂ = fracción de su máximo» (ejemplo `clase-reg-f`). IP(y = 0) ahora exacto = P_N(IP(S = 0)) (antes la celda 0 de la rejilla daba 0,50005).

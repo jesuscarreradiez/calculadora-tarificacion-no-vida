@@ -614,6 +614,9 @@
       return R;
     },
     examples: [
+      { id: 'mc-ej1', label: 'Macro de simulación «Ejemplo_1» · N ∈ {0, 1, 2} (0,5; 0,3; 0,2), severidad exponencial de media 100, VaR y CVaR al 80 %', values: { N_fam: 'tabla', N_tx: '0; 1; 2', N_tp: '0,5; 0,3; 0,2', S_fam: 'exponencial', S_exponencial_p_b: '100', m_rho: 'CVaR', m_lvl: '80', A: '1', B: '0', extra: 'VaR 80' },
+        expect: [{ k: 'E', l: 'Coste esperado', v: 69.7425029134601, src: 'Monte Carlo, 100.000 simulaciones' }, { k: 'sd', l: 'Desviación típica', v: 114.06620699588672, src: 'Monte Carlo' }, { k: 'var', l: 'VaR 80 %', v: 134.39453449146816, src: 'Monte Carlo' }, { k: 'rho', l: 'CVaR 80 %', v: 260.19415980629446, src: 'Monte Carlo' }],
+        note: 'La macro simula; la calculadora da los valores exactos (𝔼 = 0,7 × 100 = 70). Las diferencias son el error de simulación.' },
       { id: 'nov10-ag', label: 'Clase 10 nov. 2026 · a)–g), k)–l) · N ∈ {0…4}, severidad leve/moderada/grave (log-normales), franquicia anual 5, cartera de 5.000', values: { N_fam: 'tabla', N_tx: '0; 1; 2; 3; 4', N_tp: '0,4; 0,2; 0,2; 0,1; 0,1', S_fam: 'mixtura', S_mx: [{ nom: 'Leve', p: '0,8', fam: 'lognormal', E: '1', sd: '0,5' }, { nom: 'Moderado', p: '0,15', fam: 'lognormal', E: '3', sd: '2' }, { nom: 'Grave', p: '0,05', fam: 'lognormal', E: '10', sd: '10' }], m_rho: 'SW', m_a: '1', A: '1,1', B: '0,1', extra: 'VaR 95; CVaR 95; SW 1', Dg: '5', lossF: '0,85', n: '5000', colOn: true, mkOn: true, mk_rho: 'CVaR', mk_lvl: '95' },
         expect: [{ k: 'E', l: '𝔼(y)', v: 2.275, src: 'analítico' }, { k: 'sd', l: 'σ(y)', v: 4.289157842747222 }, { k: 'x2', l: 'CVaR<sub>95%</sub>(−y)', v: 15.819965325458567, src: '1.000.000 sim.' }, { k: 'Ez', l: '𝔼((y − 5)<sup>+</sup>)', v: 0.6368078762429434, src: 'simulado' }, { k: 'sdz', l: 'σ((y − 5)<sup>+</sup>)', v: 3.30753588354234, src: 'simulado' }, { k: 'rhoCart', l: 'Prima de la cartera (riesgo individual)', v: 11873.86644, src: 'solución (usa ρ(0,1) = 1,6449, el del VaR)' }, { k: 'rhoCol', l: 'Prima de la cartera (riesgo colectivo)', v: 12041.28381, src: 'simulado' }],
         note: 'Ejercicio de clase (no es de examen). <b>Posible errata en g):</b> la solución usa ρ(0,1) = 1,6449, que es el de VaR<sub>95%</sub>, aunque el enunciado pide CVaR<sub>95%</sub> (ρ(0,1) = 2,0627). Con el CVaR la prima de la cartera sale ≈ 12.000,6 y el riesgo colectivo exacto ≈ 12.018, muy cerca de su 12.041 simulado. Los momentos con franquicia y los CVaR de la solución están simulados.' },
@@ -779,7 +782,10 @@
       }
       return R;
     },
-    examples: [{
+    examples: [
+      { id: 'mc-ej2', label: 'Macro de simulación «Ejemplo_2» · N ∈ {0, 1, 2}, exponenciales de media 100 correlacionadas (cópula normal con 0,1)', values: { sm: 'una', SE: '100', Ssd: '100', N_fam: 'tabla', N_tx: '0; 1; 2', N_tp: '0,5; 0,3; 0,2', rc: '0,0844' },
+        expect: [{ k: 'Ey', l: 'Coste esperado', v: 70.15901549678787, src: 'Monte Carlo, 100.000 simulaciones' }, { k: 'Vy_r', l: 'Varianza (σ = 115,94)', v: 115.94182127298576 ** 2, src: 'Monte Carlo' }],
+        note: 'La macro correlaciona las dos severidades con una normal bivariante de correlación 0,1 y después las pasa a exponenciales; entre las exponenciales la correlación lineal resultante es ≈ 0,0844, que es la que se pone aquí. El VaR y el CVaR con severidades correlacionadas sólo se obtienen simulando (la macro da VaR₈₀ = 133,45 y CVaR₈₀ = 262,46; una simulación de 4 millones da 133,19 y 262,54).' },{
       id: 'oct20-mix', label: 'Clase 20 oct. 2026 · severidad leve/grave, N ∈ {0, 1, 2}, correlación 0,2',
       values: { sm: 'tipos', sev: [{ nom: 'Leve', p: '0,99', E: '10', sd: '100' }, { nom: 'Grave', p: '0,01', E: '1000', sd: '1.000.000' }], N_fam: 'tabla', N_tx: '0; 1; 2', N_tp: '0,7; 0,2; 0,1', rc: '0,2' },
       expect: [{ k: 'ES', l: '𝔼(S)', v: 19.9, src: 'hoja Oct_20_II' }, { k: 'VmS', l: 'Varianza de medias de S', v: 9702.99 }, { k: 'IS', l: 'Índice de mixtura de S', v: 9702.99 / 10000009900 }, { k: 'Ey', l: '𝔼(y)', v: 7.96 }, { k: 'Vy', l: 'σ²(y)', v: 0.4 * (9702.99 + 10000009900) + 19.9 * 19.9 * 0.44 }, { k: 'Vy_r', l: 'σ²(y) con r = 0,2', v: (9702.99 + 10000009900) * (0.2 + 0.1 * 2.4) + 19.9 * 19.9 * 0.44 }],
